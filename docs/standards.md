@@ -112,7 +112,7 @@ burger-api:v1.0.0
 
 ## Environment Naming
 
-We use three main environments:
+We use two main environments:
 
  Environment | Purpose |
 --------------|----------|
