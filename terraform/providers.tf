@@ -13,7 +13,6 @@ terraform {
       version = ">= 2.1.0"
     }
   }
-  required_version = ">= 1.9"
   backend "azurerm" {
     resource_group_name  = "expensyapp-cometops"
     storage_account_name = "expensyapp"
