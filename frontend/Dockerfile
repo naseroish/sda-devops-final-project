@@ -1,21 +1,19 @@
-# Use official Node.js LTS image
-FROM node:18-alpine
-
-# Set working directory
+#(Build stage)
+FROM node:18-alpine AS builder
 WORKDIR /app
-
-# Install dependencies
 COPY package.json package-lock.json ./
 RUN npm install --frozen-lockfile
-
-# Copy the rest of the application code
 COPY . .
-
-# Build the Next.js app
 RUN npm run build
 
-# Expose port (default Next.js port)
-EXPOSE 3000
+# (Production stage)
+FROM node:18-alpine AS runner
+WORKDIR /app
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/next.config.mjs ./next.config.mjs
 
-# Start the Next.js app
+EXPOSE 3000
 CMD ["npm", "start"]
