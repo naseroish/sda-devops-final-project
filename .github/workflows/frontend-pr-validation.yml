@@ -31,7 +31,7 @@ jobs:
       - name: Run lint
         run: |
           cd frontend
-          npm run lint
+          npx next lint --dir ./
 
       - name: Run typecheck
         run: |
