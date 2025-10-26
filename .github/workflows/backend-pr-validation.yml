@@ -1,0 +1,68 @@
+name: Backend PR Validation
+
+on:
+  pull_request:
+    branches: [ "dev", "main" ]
+    paths:
+      - "backend/**"
+
+jobs:
+  backend-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Build Docker image (test only)
+        run: docker build -t backend-test-image -f backend/Dockerfile backend/
+
+      - name: Run unit tests
+        working-directory: backend
+        run: npm test
+
+      - name: Code quality checks
+        working-directory: backend
+        run: |
+          npm run build
+          npm run lint || echo "No lint script found"
+
+      - name: Security scan (npm audit)
+        working-directory: backend
+        run: |
+          npm audit --audit-level=moderate || echo "Security scan completed with warnings"
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: backend-test-image
+          format: table
+          exit-code: 0
+
+      - name: 🔍 SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        continue-on-error: true  # Allow PR to pass - SonarCloud needs main branch initialization
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: backend/
+          args: >
+            -Dsonar.projectKey=sda-devops-final-project
+            -Dsonar.projectName=expency-backend
+            -Dsonar.organization=naseroish
+            -Dsonar.sources=src
+            -Dsonar.tests=__tests__
+            -Dsonar.test.inclusions=__tests__/**/*.test.js
+            -Dsonar.exclusions=**/__tests__/**,**/*.config.js
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            -Dsonar.newCode.referenceBranch=main
