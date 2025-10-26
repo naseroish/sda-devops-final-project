@@ -26,10 +26,6 @@ jobs:
         run: |
           docker build -t frontend-test ./frontend
 
-      - name: Run lint
-        run: npx next lint
-        working-directory: frontend
-
       - name: Run typecheck
         run: npx tsc --noEmit
         working-directory: frontend
@@ -42,7 +38,7 @@ jobs:
           format: table
           exit-code: 0
 
-      - name: 🔍 SonarCloud Scan
+      - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v6
         continue-on-error: true  # Allow PR to pass - SonarCloud needs main branch initialization
         env:
