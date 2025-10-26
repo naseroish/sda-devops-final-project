@@ -56,8 +56,8 @@ jobs:
         with:
           projectBaseDir: backend/
           args: >
-            -Dsonar.projectKey=naseroish_sda-devops-final-project-backend
-            -Dsonar.projectName="Burger Builder Backend"
+            -Dsonar.projectKey=sda-devops-final-project
+            -Dsonar.projectName=expency-backend
             -Dsonar.organization=naseroish
             -Dsonar.sources=src
             -Dsonar.tests=__tests__
