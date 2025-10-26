@@ -1,6 +1,12 @@
 #(Build stage)
 FROM node:20-alpine AS builder
 WORKDIR /app
+
+# Accept build arg for API URL (docker build --build-arg NEXT_PUBLIC_API_URL=http://backend:port -t final/frontend .)
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+
 COPY package.json ./
 RUN npm install
 COPY . .
