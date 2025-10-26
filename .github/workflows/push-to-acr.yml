@@ -44,3 +44,5 @@ jobs:
           context: ./frontend
           push: true
           tags: ${{ env.ACR_SERVER }}/${{ env.FRONTEND_IMAGE }}:${{ env.FRONTEND_TAG }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://backend-service:8706/
