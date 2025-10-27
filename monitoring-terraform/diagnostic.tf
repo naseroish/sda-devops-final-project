@@ -1,21 +1,24 @@
-resource "azurerm_monitor_diagnostic_setting" "resource_logs" {
-  name               = "${var.prefix}-resource-logs"
-  target_resource_id = "<RESOURCE_ID_HERE>" 
+resource "azurerm_eventhub_namespace_authorization_rule" "activity_logs" {
+  name                = "${var.prefix}-activity-logs-access"
+  namespace_name      = azurerm_eventhub_namespace.eh_ns.name
+  resource_group_name = data.azurerm_resource_group.existing_rg.name
 
-  log_analytics_workspace_id = data.azurerm_log_analytics_workspace.existing_workspace.id
+  listen = true
+  send   = true
+  manage = false
+}
 
-  log {
+resource "azurerm_monitor_activity_log_alert" "rg_activity_logs" {
+  name                = "${var.prefix}-activity-log-alert"
+  resource_group_name = data.azurerm_resource_group.existing_rg.name
+  scopes              = [data.azurerm_resource_group.existing_rg.id]
+
+  criteria {
     category = "Administrative"
-    enabled  = true
   }
 
-  log {
-    category = "Security"
-    enabled  = true
-  }
-
-  metric {
-    category = "AllMetrics"
-    enabled  = true
+  action {
+    action_group_id = "<ACTION_GROUP_PLACEHOLDER>"
   }
 }
+

@@ -18,4 +18,10 @@ resource "helm_release" "prometheus" {
     name  = "grafana.adminPassword"
     value = "ChangeMe123!"
   }
+
+  set {
+    name  = "grafana.plugins"
+    value = "grafana-simple-json-datasource,grafana-infinity-datasource"
+  }
 }
+
