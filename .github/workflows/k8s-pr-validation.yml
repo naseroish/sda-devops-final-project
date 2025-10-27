@@ -33,15 +33,3 @@ jobs:
           wget -q https://github.com/zegl/kube-score/releases/download/v1.17.0/kube-score_1.17.0_linux_amd64 -O kube-score
           chmod +x kube-score
           ./kube-score score kubernetes/ || true
-
-      # Step 4: Post results as PR comment
-      - name: Comment results on PR
-        if: always()
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: Kubernetes Validation Report
-          message: |
-            YAML Lint: Passed  
-            Kubeval: Passed  
-            Kube-score: Check warnings above  
-            Validation completed. Review logs for details.
