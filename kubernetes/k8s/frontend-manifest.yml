@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,7 +20,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          # ACR image 
+          # ACR image
           image: cometops.azurecr.io/final/frontend:latest
           imagePullPolicy: Always
           ports:
