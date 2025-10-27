@@ -1,0 +1,35 @@
+name: Kubernetes PR Validation
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+    paths:
+      - 'kubernetes/**'
+
+jobs:
+  validate:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 1: Validate YAML syntax
+      - name: Check YAML syntax
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: kubernetes/
+
+      # Step 2: Validate Kubernetes manifests structure
+      - name: Validate manifests with kubeval
+        uses: instrumenta/kubeval-action@master
+        with:
+          files: kubernetes/
+      
+      # Step 3: Run security scans (kube-score)
+      - name: Run kube-score (security & best practices)
+        run: |
+          wget -q https://github.com/zegl/kube-score/releases/download/v1.17.0/kube-score_1.17.0_linux_amd64 -O kube-score
+          chmod +x kube-score
+          ./kube-score score kubernetes/ || true
