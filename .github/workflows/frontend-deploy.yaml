@@ -7,11 +7,14 @@ on:
       - 'frontend/**'
 
 env:
-  ACR_NAME: finalcometops.azurecr.io
+  ACR_NAME: finalcometops
+  ACR_SERVER: finalcometops.azurecr.io
   IMAGE_NAME: expensy
+  IMAGE_TAG: latest
   AKS_RESOURCE_GROUP: final-cometops
   AKS_CLUSTER: final-cometops-aks
   NAMESPACE: expensy
+  FRONTEND_BUILD_ARG: NEXT_PUBLIC_API_URL=https://lb-backend-service.expensy.svc.cluster.local
 
 jobs:
   deploy-frontend:
@@ -29,13 +32,17 @@ jobs:
       - name: Login to ACR
         run: az acr login --name ${{ env.ACR_NAME }}
 
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build & Push Frontend Docker Image
-        run: |
-          cd frontend
-          docker build \
-            --build-arg API_URL=https://lb-backend-service.expensy.svc.cluster.local \
-            -t ${{ env.ACR_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-          docker push ${{ env.ACR_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ env.ACR_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          build-args: |
+            ${{ env.FRONTEND_BUILD_ARG }}
 
       - name: Get AKS Credentials
         run: az aks get-credentials --resource-group ${{ env.AKS_RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER }} --overwrite-existing
@@ -43,7 +50,7 @@ jobs:
       - name: Deploy to AKS
         run: |
           kubectl set image deployment/frontend-deploy \
-            frontend-container=${{ env.ACR_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            frontend-container=${{ env.ACR_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
             -n ${{ env.NAMESPACE }}
           kubectl rollout status deployment/frontend-deploy -n ${{ env.NAMESPACE }}
 
