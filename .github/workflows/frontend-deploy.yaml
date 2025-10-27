@@ -1,0 +1,63 @@
+name: Frontend Deploy to AKS
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+      - 'k8s/frontend/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+      - 'k8s/frontend/**'
+
+env:
+  ACR_NAME: finalcometops.azurecr.io
+  IMAGE_NAME: frontend-app
+  AKS_RESOURCE_GROUP: final-cometops
+  AKS_CLUSTER: final-cometops-aks
+  NAMESPACE: user-management
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build Frontend Docker Image
+        run: |
+          cd frontend
+          docker build \
+            --build-arg API_URL=https://lb-backend-service.user-management.svc.cluster.local \
+            -t ${{ env.ACR_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+
+      - name: Push Docker Image to ACR
+        run: docker push ${{ env.ACR_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Get AKS Credentials
+        run: az aks get-credentials --resource-group ${{ env.AKS_RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER }} --overwrite-existing
+
+      - name: Deploy to AKS
+        run: |
+          kubectl set image deployment/frontend-deploy \
+            frontend-container=${{ env.ACR_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/frontend-deploy -n ${{ env.NAMESPACE }}
+
+      - name: Smoke Test - Check Frontend Availability
+        run: |
+          sleep 15
+          EXTERNAL_IP=$(kubectl get svc lb-frontend-service -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Frontend external IP: $EXTERNAL_IP"
+          curl -I http://$EXTERNAL_IP/
