@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -15,35 +16,35 @@ spec:
         app: redis
     spec:
       securityContext:
-        fsGroup: 1001      # Redis runs as user 1001 in Bitnami image
+        fsGroup: 1001
       containers:
-      - name: redis-container
-        image: bitnami/redis:latest
-        ports:
-        - containerPort: 6379
-        env:
-        - name: REDIS_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: expensy-secrets
-              key: REDIS_PASSWORD
-        command: [ "redis-server", "--requirepass", "$(REDIS_PASSWORD)" ]
-        resources:
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        volumeMounts:
-        - name: redis-storage
-          mountPath: /bitnami/redis/data
+        - name: redis-container
+          image: bitnami/redis:latest
+          ports:
+            - containerPort: 6379
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: expensy-secrets
+                  key: REDIS_PASSWORD
+          command: ["redis-server", "--requirepass", "$(REDIS_PASSWORD)"]
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /bitnami/redis/data
   volumeClaimTemplates:
-  - metadata:
-      name: redis-storage
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      resources:
-        requests:
-          storage: 2Gi
-      storageClassName: managed-csi  # Azure AKS default storage class
+    - metadata:
+        name: redis-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi
+        storageClassName: managed-csi
 ---
 apiVersion: v1
 kind: Service
@@ -54,7 +55,7 @@ spec:
   selector:
     app: redis
   ports:
-  - port: 6379
-    targetPort: 6379
-    protocol: TCP
-  clusterIP: None  # headless service (required for StatefulSet stable network identity)
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+  clusterIP: None
