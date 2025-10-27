@@ -1,0 +1,54 @@
+name: Frontend PR Validation
+
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  validate-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.9.0'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build Docker image (test only)
+        run: |
+          docker build -t frontend-test ./frontend
+
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: frontend-test
+          format: table
+          exit-code: 0
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        continue-on-error: true  # Allow PR to pass - SonarCloud needs main branch initialization
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: backend/
+          args: >
+            -Dsonar.projectKey=sda-devops-final-project
+            -Dsonar.projectName=expency-backend
+            -Dsonar.organization=naseroish
+            -Dsonar.sources=src
+            -Dsonar.tests=__tests__
+            -Dsonar.test.inclusions=__tests__/**/*.test.js
+            -Dsonar.exclusions=**/__tests__/**,**/*.config.js
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            -Dsonar.newCode.referenceBranch=main
