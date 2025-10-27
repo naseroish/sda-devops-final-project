@@ -5,19 +5,13 @@ on:
     branches: [ main, develop ]
     paths:
       - 'frontend/**'
-      - 'k8s/frontend/**'
-  pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'frontend/**'
-      - 'k8s/frontend/**'
 
 env:
   ACR_NAME: finalcometops.azurecr.io
-  IMAGE_NAME: frontend-app
+  IMAGE_NAME: expensy
   AKS_RESOURCE_GROUP: final-cometops
   AKS_CLUSTER: final-cometops-aks
-  NAMESPACE: user-management
+  NAMESPACE: expensy
 
 jobs:
   deploy-frontend:
@@ -35,15 +29,13 @@ jobs:
       - name: Login to ACR
         run: az acr login --name ${{ env.ACR_NAME }}
 
-      - name: Build Frontend Docker Image
+      - name: Build & Push Frontend Docker Image
         run: |
           cd frontend
           docker build \
-            --build-arg API_URL=https://lb-backend-service.user-management.svc.cluster.local \
+            --build-arg API_URL=https://lb-backend-service.expensy.svc.cluster.local \
             -t ${{ env.ACR_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-
-      - name: Push Docker Image to ACR
-        run: docker push ${{ env.ACR_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.ACR_NAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Get AKS Credentials
         run: az aks get-credentials --resource-group ${{ env.AKS_RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER }} --overwrite-existing
