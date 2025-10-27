@@ -1,4 +1,3 @@
-
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -46,7 +45,6 @@ spec:
           requests:
             storage: 2Gi
         storageClassName: managed-csi # Azure AKS default storage class
-
 ---
 apiVersion: v1
 kind: Service
@@ -61,4 +59,3 @@ spec:
       targetPort: 6379
       protocol: TCP
   clusterIP: None # headless service (required for StatefulSet stable network identity)
-
