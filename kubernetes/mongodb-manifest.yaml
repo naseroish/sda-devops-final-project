@@ -16,7 +16,7 @@ spec:
         app: mongodb
     spec:
       securityContext:
-        fsGroup: 999 # Set the fsGroup to match the MongoDB user group
+        fsGroup: 999
       containers:
         - name: mongodb-container
           image: mongo:latest
@@ -44,8 +44,7 @@ spec:
         resources:
           requests:
             storage: 3Gi
-        storageClassName: managed-csi # use Azure's built-in CSI-based storage class
-
+        storageClassName: managed-csi
 ---
 apiVersion: v1
 kind: Service
@@ -58,5 +57,4 @@ spec:
     - protocol: TCP
       port: 27017
       targetPort: 27017
-  clusterIP: None # headless service, enables persistent identifier for each pod across any rescheduling
-
+  clusterIP: None

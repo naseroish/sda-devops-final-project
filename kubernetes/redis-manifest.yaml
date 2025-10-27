@@ -16,7 +16,7 @@ spec:
         app: redis
     spec:
       securityContext:
-        fsGroup: 1001 # Redis runs as user 1001 in Bitnami image
+        fsGroup: 1001
       containers:
         - name: redis-container
           image: bitnami/redis:latest
@@ -44,7 +44,7 @@ spec:
         resources:
           requests:
             storage: 2Gi
-        storageClassName: managed-csi # Azure AKS default storage class
+        storageClassName: managed-csi
 ---
 apiVersion: v1
 kind: Service
@@ -58,4 +58,4 @@ spec:
     - port: 6379
       targetPort: 6379
       protocol: TCP
-  clusterIP: None # headless service (required for StatefulSet stable network identity)
+  clusterIP: None
