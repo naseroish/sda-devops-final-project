@@ -22,5 +22,3 @@ COPY --from=builder /app/dist ./dist
 EXPOSE 8706
 
 CMD ["node", "dist/server.js"]
-
-#sample comment
