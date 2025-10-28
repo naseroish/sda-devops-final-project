@@ -119,6 +119,23 @@ jobs:
             # Fallback for older installs where it might be a Deployment
             kubectl rollout status deploy/argocd-application-controller -n $ARGOCD_NAMESPACE --timeout=600s || true
           fi
+          # Ensure pods are Ready (not just Deployment available)
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-repo-server -n $ARGOCD_NAMESPACE --timeout=600s || exit 1
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n $ARGOCD_NAMESPACE --timeout=600s || exit 1
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-application-controller -n $ARGOCD_NAMESPACE --timeout=600s || true
+
+      - name: Verify ArgoCD services/endpoints
+        run: |
+          kubectl get svc -n $ARGOCD_NAMESPACE
+          kubectl get endpoints -n $ARGOCD_NAMESPACE
+          # Check repo-server endpoints specifically
+          EP_COUNT=$(kubectl get endpoints argocd-repo-server -n $ARGOCD_NAMESPACE -o jsonpath='{.subsets[0].addresses[*]}' | wc -w || echo 0)
+          echo "argocd-repo-server endpoint count: $EP_COUNT"
+          if [ "$EP_COUNT" -eq 0 ]; then
+            echo "argocd-repo-server has no endpoints; retrying after short wait..."
+            sleep 10
+            kubectl get endpoints argocd-repo-server -n $ARGOCD_NAMESPACE -o yaml || true
+          fi
 
       - name: Setup ArgoCD port-forward and get admin password
         id: argocd-access
@@ -203,7 +220,14 @@ jobs:
       - name: Sync applications
         if: github.event.inputs.action == 'sync' || github.event.inputs.action == 'setup' || github.event_name == 'push'
         run: |
-          argocd app sync $APP_NAME --timeout 600 --retry-limit 3
+          # Retry sync to handle transient repo-server readiness
+          for i in {1..5}; do
+            if argocd app sync $APP_NAME --timeout 600 --retry-limit 3; then
+              break
+            fi
+            echo "Retrying root app sync ($i/5) ..."
+            sleep 10
+          done
           # Sync monitoring apps explicitly as they are separate Applications
           argocd app sync monitoring-prometheus --timeout 600 --retry-limit 3 || true
           argocd app sync monitoring-loki --timeout 600 --retry-limit 3 || true
