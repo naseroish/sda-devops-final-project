@@ -32,13 +32,13 @@ jobs:
       - name: Check Terraform formatting
         run: terraform fmt -check -recursive
 
-      - name: Validate Terraform syntax
-        run: terraform validate
-
       - name: Terraform Init
         run: terraform init
         env:
           ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+
+      - name: Validate Terraform syntax
+        run: terraform validate
 
       - name: Terraform Plan
         run: terraform plan -no-color -input=false -lock=false -out=terraform.tfplan
