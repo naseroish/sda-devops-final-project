@@ -18,7 +18,7 @@ env:
   NAMESPACE: expensy
   DEPLOYMENT_NAME: frontend-deployment
   CONTAINER_NAME: frontend
-  FRONTEND_BUILD_ARG: NEXT_PUBLIC_API_URL= 
+  FRONTEND_BUILD_ARG: NEXT_PUBLIC_API_URL=/api
 
 jobs:
   build-and-push:
