@@ -112,7 +112,13 @@ jobs:
           # These rollouts can be safely run whether ArgoCD was just installed or already present
           kubectl rollout status deploy/argocd-server -n $ARGOCD_NAMESPACE --timeout=600s || exit 1
           kubectl rollout status deploy/argocd-repo-server -n $ARGOCD_NAMESPACE --timeout=600s || exit 1
-          kubectl rollout status deploy/argocd-application-controller -n $ARGOCD_NAMESPACE --timeout=600s || exit 1
+          # argocd-application-controller is a StatefulSet in modern Argo CD
+          if kubectl get statefulset argocd-application-controller -n $ARGOCD_NAMESPACE >/dev/null 2>&1; then
+            kubectl rollout status statefulset/argocd-application-controller -n $ARGOCD_NAMESPACE --timeout=600s || exit 1
+          else
+            # Fallback for older installs where it might be a Deployment
+            kubectl rollout status deploy/argocd-application-controller -n $ARGOCD_NAMESPACE --timeout=600s || true
+          fi
 
       - name: Setup ArgoCD port-forward and get admin password
         id: argocd-access
