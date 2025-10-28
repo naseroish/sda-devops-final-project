@@ -82,12 +82,14 @@ jobs:
       - name: Check ArgoCD installation
         id: check-argocd
         run: |
-          if kubectl get namespace $ARGOCD_NAMESPACE 2>/dev/null; then
+          # Consider ArgoCD installed only if the argocd-server deployment exists
+          if kubectl get deploy argocd-server -n $ARGOCD_NAMESPACE >/dev/null 2>&1; then
             echo "installed=true" >> $GITHUB_OUTPUT
             VERSION=$(kubectl get deployment argocd-server -n $ARGOCD_NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d':' -f2 || echo "unknown")
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           else
             echo "installed=false" >> $GITHUB_OUTPUT
+            echo "ArgoCD not detected in namespace $ARGOCD_NAMESPACE (argocd-server deployment missing)." >&2
           fi
 
       - name: Install ArgoCD
