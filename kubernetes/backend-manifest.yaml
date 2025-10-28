@@ -43,7 +43,7 @@ spec:
                   name: expensy-secrets
                   key: DATABASE_URI
             - name: REDIS_HOST
-              value: "redis-service.expensy.svc.cluster.local"
+              value: "redis-service"
             - name: REDIS_PORT
               value: "6379"
             - name: REDIS_PASSWORD
