@@ -15,11 +15,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
   node_resource_group = "${var.prefix}-aks-node"
 
   default_node_pool {
-    name       = var.default_node_pool_name
-    vm_size    = var.vm_size
+    name                 = var.default_node_pool_name
+    vm_size              = var.vm_size
     auto_scaling_enabled = true
-    min_count  = 2
-    max_count  = 4
+    min_count            = 2
+    max_count            = 4
   }
 
   # System-assigned managed identity
