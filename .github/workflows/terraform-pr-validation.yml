@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: infrastructure
+        working-directory: terraform
         shell: bash
     steps:
       - name: Checkout repository
@@ -49,12 +49,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: infrastructure/terraform.tfplan
+          path: terraform/terraform.tfplan
 
       - name: Run tfsec (Terraform security scan)
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
-          working_directory: infrastructure
+          working_directory: terraform
 
       - name: Post Plan & Security Results to PR
         uses: marocchino/sticky-pull-request-comment@v2
