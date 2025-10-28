@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'infrastructure/**'
+      - 'terraform/**'
 
 jobs:
   terraform-validation:
@@ -13,8 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: infrastructure
+        working-directory: terraform
         shell: bash
+    env:
+      ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+      ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+      ARM_SUBSCRIPTION_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).subscriptionId }}
+      ARM_TENANT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,29 +37,25 @@ jobs:
       - name: Check Terraform formatting
         run: terraform fmt -check -recursive
 
+      - name: Terraform Init
+        run: terraform init
+
       - name: Validate Terraform syntax
         run: terraform validate
 
-      - name: Terraform Init
-        run: terraform init
-        env:
-          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
-
       - name: Terraform Plan
         run: terraform plan -no-color -input=false -lock=false -out=terraform.tfplan
-        env:
-          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
 
       - name: Upload Terraform Plan
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: infrastructure/terraform.tfplan
+          path: terraform/terraform.tfplan
 
       - name: Run tfsec (Terraform security scan)
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
-          working_directory: infrastructure
+          working_directory: terraform
 
       - name: Post Plan & Security Results to PR
         uses: marocchino/sticky-pull-request-comment@v2
