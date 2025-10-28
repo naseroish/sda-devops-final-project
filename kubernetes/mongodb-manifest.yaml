@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -15,35 +16,35 @@ spec:
         app: mongodb
     spec:
       securityContext:
-        fsGroup: 999      # Set the fsGroup to match the MongoDB user group
+        fsGroup: 999
       containers:
-      - name: mongodb-container
-        image: mongo:latest
-        env:
-        - name: MONGO_INITDB_ROOT_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: expensy-secrets
-              key: MONGO_INITDB_ROOT_USERNAME
-        - name: MONGO_INITDB_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: expensy-secrets
-              key: MONGO_INITDB_ROOT_PASSWORD
-        ports:
-        - containerPort: 27017
-        volumeMounts:
-        - name: mongo-storage
-          mountPath: /data/db
+        - name: mongodb-container
+          image: mongo:latest
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: expensy-secrets
+                  key: MONGO_INITDB_ROOT_USERNAME
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: expensy-secrets
+                  key: MONGO_INITDB_ROOT_PASSWORD
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongo-storage
+              mountPath: /data/db
   volumeClaimTemplates:
-  - metadata:
-      name: mongo-storage
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 3Gi
-      storageClassName: managed-csi  # use Azure’s built-in CSI-based storage class
+    - metadata:
+        name: mongo-storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 3Gi
+        storageClassName: managed-csi
 ---
 apiVersion: v1
 kind: Service
@@ -53,7 +54,7 @@ spec:
   selector:
     app: mongodb
   ports:
-  - protocol: TCP
-    port: 27017
-    targetPort: 27017
-  clusterIP: None  # headless service, enables persistent identifier for each pod across any rescheduling
+    - protocol: TCP
+      port: 27017
+      targetPort: 27017
+  clusterIP: None

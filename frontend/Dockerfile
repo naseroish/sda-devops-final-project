@@ -23,3 +23,5 @@ COPY --from=builder /app/next.config.mjs ./next.config.mjs
 
 EXPOSE 3000
 CMD ["npx", "next", "start"]
+
+#check

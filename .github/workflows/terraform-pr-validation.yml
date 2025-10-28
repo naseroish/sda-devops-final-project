@@ -1,0 +1,71 @@
+name: Terraform PR Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'infrastructure/**'
+
+jobs:
+  terraform-validation:
+    name: Terraform PR Validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructure
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Azure CLI
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
+
+      - name: Validate Terraform syntax
+        run: terraform validate
+
+      - name: Terraform Init
+        run: terraform init
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+
+      - name: Terraform Plan
+        run: terraform plan -no-color -input=false -lock=false -out=terraform.tfplan
+        env:
+          ARM_ACCESS_KEY: ${{ secrets.ARM_ACCESS_KEY }}
+
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: infrastructure/terraform.tfplan
+
+      - name: Run tfsec (Terraform security scan)
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: infrastructure
+
+      - name: Post Plan & Security Results to PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: Terraform Plan & Security Results
+          message: |
+            ### Terraform Plan
+            See attached artifact for plan file.
+            ### Security Scan
+            See tfsec output above.
+
+      # Add Bicep validation if you use Bicep files
+      # - name: Validate Bicep files
+      #   run: for file in $(find . -name '*.bicep'); do bicep build $file; done
