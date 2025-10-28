@@ -55,7 +55,7 @@ These flows validate code quality and security when pull requests are opened. Th
 
 ---
 
-## Flow 1: Infrastructure PR Validation
+## Flow 1: Terraform PR Validation
 
 **When:** Pull request to `/infrastructure/**`  
 **Branch:** `main` only
