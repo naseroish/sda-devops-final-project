@@ -1,0 +1,108 @@
+name: Backend CI/CD - Build, Push & Deploy to AKS
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'backend/**'
+      - 'kubernetes/backend-manifest.yaml'
+
+env:
+  ACR_NAME: cometops
+  ACR_LOGIN_SERVER: cometops.azurecr.io
+  IMAGE_NAME: final/backend
+  AKS_CLUSTER_NAME: final-cometops-aks-cluster
+  AKS_RESOURCE_GROUP: final-cometops
+  NAMESPACE: expensy
+  DEPLOYMENT_NAME: backend-deployment
+
+jobs:
+  build-and-push:
+    name: Build and Push Backend Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Save image tag
+        run: echo "${{ github.sha }}" > image-tag.txt
+
+      - name: Upload artifact (image tag)
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-image-tag
+          path: image-tag.txt
+
+  deploy:
+    name: Deploy to AKS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download image tag
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-image-tag
+
+      - name: Read image tag
+        id: image-tag
+        run: |
+          TAG=$(cat image-tag.txt)
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ env.AKS_RESOURCE_GROUP }} \
+            --name ${{ env.AKS_CLUSTER_NAME }} \
+            --overwrite-existing
+
+      - name: Update deployment image
+        run: |
+          # Use the saved image tag (from the build job artifact). The TAG variable is set in a previous step via GITHUB_ENV.
+          # kubectl set image targets a Kubernetes Deployment resource (not a filesystem path).
+          kubectl set image deployment/${{ env.DEPLOYMENT_NAME }} \
+            backend=${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:$TAG \
+            -n ${{ env.NAMESPACE }}
+
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} --timeout=5m
+
+      - name: Verify pods and service
+        run: |
+          kubectl get pods -n ${{ env.NAMESPACE }} -l app=backend
+          kubectl get svc backend-service -n ${{ env.NAMESPACE }}
+
+      - name: Smoke test
+        run: |
+          kubectl run curl-test --image=curlimages/curl:latest --rm -i --restart=Never -n ${{ env.NAMESPACE }} -- \
+            curl -f http://backend-service.${{ env.NAMESPACE }}.svc.cluster.local:8706/metrics || exit 1
