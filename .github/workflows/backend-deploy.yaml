@@ -8,8 +8,6 @@ on:
     paths:
       - 'backend/**'
       - 'kubernetes/backend-manifest.yaml'
-  pull_request:
-    branches: [ main, develop ]
 
 env:
   ACR_NAME: cometops
@@ -90,8 +88,10 @@ jobs:
 
       - name: Update deployment image
         run: |
+          # Use the saved image tag (from the build job artifact). The TAG variable is set in a previous step via GITHUB_ENV.
+          # kubectl set image targets a Kubernetes Deployment resource (not a filesystem path).
           kubectl set image deployment/${{ env.DEPLOYMENT_NAME }} \
-            backend=${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            backend=${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:$TAG \
             -n ${{ env.NAMESPACE }}
 
       - name: Wait for rollout
