@@ -1,0 +1,199 @@
+name: ArgoCD Complete Setup & Management
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'setup'
+        type: choice
+        options:
+          - setup
+          - sync
+          - health
+          - uninstall
+  push:
+    branches:
+      - main
+    paths:
+      - 'kubernetes/**'
+      - '.github/workflows/setup-argocd.yml'
+  schedule:
+    - cron: '0 0 * * *'
+
+env:
+  ARGOCD_VERSION: v2.11.0
+  ARGOCD_NAMESPACE: argocd
+  APP_NAME: expensy-aks
+  K8S_PATH: kubernetes
+
+jobs:
+  setup-and-manage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name ${{ secrets.AKS_CLUSTER_NAME }} \
+            --overwrite-existing
+          kubectl cluster-info
+
+      - name: Verify AKS connectivity
+        run: |
+          kubectl get nodes
+
+      - name: Ensure namespaces exist (expensy, monitoring, argocd)
+        run: |
+          for ns in expensy monitoring $ARGOCD_NAMESPACE; do
+            kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
+          done
+
+      - name: Create/Update app secrets (expensy)
+        run: |
+          kubectl -n expensy create secret generic expensy-secrets \
+            --from-literal=DATABASE_URI='${{ secrets.DATABASE_URI }}' \
+            --from-literal=REDIS_PASSWORD='${{ secrets.REDIS_PASSWORD }}' \
+            --from-literal=MONGO_INITDB_ROOT_USERNAME='${{ secrets.MONGO_INITDB_ROOT_USERNAME }}' \
+            --from-literal=MONGO_INITDB_ROOT_PASSWORD='${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create/Update Grafana admin secret (monitoring)
+        run: |
+          kubectl -n monitoring create secret generic grafana-admin \
+            --from-literal=admin-user='admin' \
+            --from-literal=admin-password='${{ secrets.GRAFANA_ADMIN_PASSWORD }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Check ArgoCD installation
+        id: check-argocd
+        run: |
+          if kubectl get namespace $ARGOCD_NAMESPACE 2>/dev/null; then
+            echo "installed=true" >> $GITHUB_OUTPUT
+            VERSION=$(kubectl get deployment argocd-server -n $ARGOCD_NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d':' -f2 || echo "unknown")
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "installed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install ArgoCD
+        if: steps.check-argocd.outputs.installed == 'false' && (github.event.inputs.action == 'setup' || github.event_name == 'push')
+        run: |
+          kubectl apply -n $ARGOCD_NAMESPACE -f https://raw.githubusercontent.com/argoproj/argo-cd/$ARGOCD_VERSION/manifests/install.yaml
+          kubectl wait --for=condition=available deployment/argocd-server -n $ARGOCD_NAMESPACE --timeout=600s
+
+      - name: Install ArgoCD CLI
+        run: |
+          if ! command -v argocd &> /dev/null; then
+            curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/download/$ARGOCD_VERSION/argocd-linux-amd64
+            sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+            rm argocd-linux-amd64
+          fi
+          argocd version --client
+
+      - name: Setup ArgoCD port-forward and get admin password
+        id: argocd-access
+        run: |
+          kubectl port-forward svc/argocd-server -n $ARGOCD_NAMESPACE 8080:443 >/dev/null 2>&1 &
+          echo "portforward_pid=$!" >> $GITHUB_OUTPUT
+          sleep 10
+          PW=$(kubectl -n $ARGOCD_NAMESPACE get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d || true)
+          if [ -z "$PW" ]; then PW='${{ secrets.ARGOCD_ADMIN_PASSWORD }}'; fi
+          echo "::add-mask::$PW"
+          echo "password=$PW" >> $GITHUB_OUTPUT
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login localhost:8080 --username admin --password '${{ steps.argocd-access.outputs.password }}' --insecure
+
+      - name: Update admin password (first install only)
+        if: steps.check-argocd.outputs.installed == 'false'
+        run: |
+          argocd account update-password \
+            --current-password '${{ steps.argocd-access.outputs.password }}' \
+            --new-password '${{ secrets.ARGOCD_ADMIN_PASSWORD }}' || true
+
+      - name: Configure GitHub repo in ArgoCD (if needed)
+        run: |
+          if ! argocd repo list | grep -q "${{ github.repository }}"; then
+            argocd repo add https://github.com/${{ github.repository }}.git \
+              --username ${{ github.actor }} \
+              --password ${{ secrets.GH_PAT }} \
+              --insecure-skip-server-verification
+          fi
+
+      - name: Apply monitoring Applications (Prometheus/Grafana, Loki)
+        run: |
+          kubectl apply -f $K8S_PATH/monitoring-apps.yaml
+
+      - name: Create or update root ArgoCD application
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata:
+            name: $APP_NAME
+            namespace: $ARGOCD_NAMESPACE
+            finalizers:
+              - resources-finalizer.argocd.argoproj.io
+          spec:
+            project: default
+            source:
+              repoURL: https://github.com/${{ github.repository }}.git
+              targetRevision: ${{ github.ref_name }}
+              path: $K8S_PATH
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: default
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+                allowEmpty: false
+              syncOptions:
+                - CreateNamespace=true
+                - PruneLast=true
+          EOF
+
+      - name: Sync applications
+        if: github.event.inputs.action == 'sync' || github.event.inputs.action == 'setup' || github.event_name == 'push'
+        run: |
+          argocd app sync $APP_NAME --timeout 600 --retry-limit 3
+          # Sync monitoring apps explicitly as they are separate Applications
+          argocd app sync monitoring-prometheus --timeout 600 --retry-limit 3 || true
+          argocd app sync monitoring-loki --timeout 600 --retry-limit 3 || true
+
+      - name: Wait for health
+        if: github.event.inputs.action == 'sync' || github.event.inputs.action == 'setup' || github.event_name == 'push'
+        run: |
+          argocd app wait $APP_NAME --health --timeout 600
+          argocd app wait monitoring-prometheus --health --timeout 600 || true
+          argocd app wait monitoring-loki --health --timeout 600 || true
+
+      - name: Uninstall ArgoCD
+        if: github.event.inputs.action == 'uninstall'
+        run: |
+          kubectl delete application $APP_NAME -n $ARGOCD_NAMESPACE || true
+          kubectl delete -f https://raw.githubusercontent.com/argoproj/argo-cd/$ARGOCD_VERSION/manifests/install.yaml -n $ARGOCD_NAMESPACE || true
+          kubectl delete namespace $ARGOCD_NAMESPACE || true
+
+      - name: Cleanup port-forward
+        if: always()
+        run: |
+          if [ -n "${{ steps.argocd-access.outputs.portforward_pid }}" ]; then
+            kill ${{ steps.argocd-access.outputs.portforward_pid }} 2>/dev/null || true
+          fi
