@@ -1,88 +1,87 @@
 # Monitoring Setup for Existing Azure Project
 
-This Terraform module sets up centralized monitoring for an existing Azure project using Event Hub, Splunk HEC, Prometheus, and Grafana. It automates the provisioning and configuration of resources so you can focus on dashboards and alerts rather than manual setup.
+This Terraform module sets up centralized monitoring for an existing Azure project using **Log Analytics, Prometheus, Grafana, Loki, and Elasticsearch (ELK)**. It automates provisioning and configuration of resources so you can focus on dashboards and alerts rather than manual setup.
 
-Overview
+## Overview
 
-Tools & Purpose:
+**Tools & Purpose:**
 
-Tool           Purpose
-Event Hub      Collects logs and metrics from Azure resources
-Splunk HEC     Receives data from Event Hub and allows queries and dashboards
-Prometheus    Collects metrics from Kubernetes cluster and other Azure resources
-Grafana       Visualizes metrics and logs in dashboards
+| Tool              | Purpose |
+|------------------|---------|
+| Log Analytics     | Collects logs and metrics automatically from all Azure resources via Diagnostic Settings |
+| Prometheus        | Collects metrics from Kubernetes cluster and other Azure resources |
+| Grafana           | Visualizes metrics and logs in dashboards |
+| Loki              | Aggregates logs from Kubernetes workloads and integrates with Grafana |
+| Elasticsearch (ELK) | Stores security events and audit logs from the cluster, integrates with Grafana dashboards |
 
-Why Terraform?
+---
 
-Automates the creation of Event Hub, Shared Access Policy, and Activity Log collection
-Deploys Prometheus and Grafana via Helm in Kubernetes cluster automatically
-Outputs connection strings and URLs for easy integration
-Ensures reproducibility: deploy to multiple environments with a single command
-Avoids manual errors and saves time
+## Why Terraform?
 
-Can you run it without Terraform?
+- Automatically enables **Diagnostic Settings** for all Azure resources in the Resource Group, sending logs and metrics to Log Analytics Workspace  
+- Deploys **Prometheus, Grafana, Loki, and Elasticsearch** via Helm in Kubernetes cluster automatically  
+- Outputs URLs for Grafana, Loki, Elasticsearch for easy access  
+- Ensures reproducibility: deploy to multiple environments with a single command  
+- Avoids manual errors and saves time  
 
-Yes, but it requires manual steps:
-1. Create Event Hub Namespace and Event Hub in Azure Portal
-2. Configure Shared Access Policy manually
-3. Enable Activity Log collection or Agents on each resource
-4. Install Prometheus and Grafana using Helm commands in the cluster
-5. Connect Grafana to Splunk HEC manually
+---
 
-Terraform is not required, but it greatly simplifies deployment and management, especially for multiple resources or RGs.
+## Can you run it without Terraform?
 
-Directory Structure
+Yes, but requires manual steps:
+
+1. Enable Diagnostic Settings on each Azure resource individually  
+2. Configure Log Analytics Workspace manually  
+3. Install Prometheus, Grafana, Loki, and Elasticsearch using Helm commands in the cluster  
+4. Connect Grafana to Loki and Elasticsearch manually  
+
+Terraform is optional but simplifies deployment and maintenance.
+
+---
+
+## Directory Structure
 
 monitoring-terraform/
-- providers.tf          Azure + Helm providers
-- variables.tf          All variables (RG, Workspace, Location, Prefix, Splunk Token)
-- terraform.tfvars      Your environment-specific values
-- main.tf               Event Hub Namespace, Event Hub, Shared Access Policy
-- diagnostic.tf         Activity log alerts and Event Hub authorization
-- helm_prom_graf.tf     Prometheus and Grafana deployment via Helm
-- outputs.tf            Outputs: Event Hub connection string, Grafana URL, Splunk HEC token
+- `providers.tf`              Azure + Helm providers  
+- `variables.tf`              All variables (RG, Workspace, Location, Prefix)  
+- `terraform.tfvars`          Your environment-specific values  
+- `main.tf`                   Data sources for RG and Log Analytics Workspace  
+- `diagnostics.tf`            Automatically enables Diagnostic Settings for all resources  
+- `helm_monitoring_stack.tf`  Prometheus, Grafana, Loki, Elasticsearch deployment via Helm  
+- `outputs.tf`                Outputs: Grafana, Loki, Elasticsearch URLs  
+- `README.md`                 Documentation  
 
-Required Values in terraform.tfvars
+---
 
+## Required Values in terraform.tfvars
+
+```hcl
 existing_rg_name        = "your-existing-RG"
 existing_workspace_name = "your-existing-LogAnalytics"
 location                = "UK West"
 prefix                  = "final-cometops"
-splunk_hec_token        = "your-splunk-hec-token"
 
-Deployment Steps
 
-cd monitoring-terraform
-terraform init
-terraform plan
-terraform apply
+## Workflow
 
-Outputs:
-
-eventhub_connection_string: Use in Splunk HEC input
-grafana_url: Access Grafana dashboards
-splunk_hec_token: Used in Grafana Infinity plugin to query Splunk
-
-Notes
-
-Activity Log Alerts capture admin and security events in your RG
-Grafana OSS with Infinity plugin allows querying Splunk directly without Enterprise
-You can extend this module by adding more resources or RGs
-Terraform ensures reproducible infrastructure and avoids manual misconfigurations
-All resources can also be deployed manually, but it is more error-prone and time-consuming
-
-Workflow
-
-Azure Resources (VMs, App Service, AKS) 
-   then to Event Hub (collects logs & metrics)
-   then to Splunk HEC (ingests logs)
-   then to Grafana (Infinity plugin queries Splunk)
-   then dashboards for metrics & logs
-
-Integration Summary
-
-Event Hub receives logs and metrics from Azure resources
-Splunk HEC ingests Event Hub data for queries and dashboards
-Prometheus collects Kubernetes metrics
-Grafana (OSS with Infinity Plugin) visualizes both Splunk logs and Prometheus metrics in a single dashboard
-This setup avoids the need for Diagnostic Settings permissions on every Azure resource, using your Splunk HEC token for integration
+Azure Resources (VMs, App Service, AKS)
+        │
+        ▼
+Log Analytics Workspace
+  - Collects logs and metrics automatically from all Azure resources via Diagnostic Settings
+        │
+        ▼
+Prometheus
+  - Collects metrics from Kubernetes cluster nodes, pods, and workloads
+        │
+        ▼
+Loki
+  - Aggregates application and system logs from Kubernetes workloads
+        │
+        ▼
+Elasticsearch (ELK)
+  - Stores security events, audit logs, and cluster-level logs
+        │
+        ▼
+Grafana Dashboards
+  - Visualizes metrics, logs, and security events from Prometheus, Loki, and Elasticsearch

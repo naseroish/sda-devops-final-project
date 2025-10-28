@@ -1,12 +1,15 @@
-output "eventhub_connection_string" {
-  value = azurerm_eventhub_authorization_rule.splunk.primary_connection_string
-}
-
 output "grafana_url" {
   value = "http://${helm_release.prometheus.name}-grafana.monitoring.svc.cluster.local:3000"
 }
 
-output "splunk_hec_token" {
-  value = var.splunk_hec_token
+output "loki_url" {
+  value = "http://${helm_release.loki.name}-loki.monitoring.svc.cluster.local:3100"
 }
 
+output "elasticsearch_url" {
+  value = "http://${helm_release.elasticsearch.name}-elasticsearch.monitoring.svc.cluster.local:9200"
+}
+
+output "prometheus_url" {
+  value = "http://${helm_release.prometheus.name}-prometheus.monitoring.svc.cluster.local:9090"
+}
