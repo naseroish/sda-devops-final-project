@@ -28,7 +28,12 @@ spec:
                 secretKeyRef:
                   name: expensy-secrets
                   key: REDIS_PASSWORD
-          command: ["redis-server", "--requirepass", "$(REDIS_PASSWORD)"]
+          command:
+            - "redis-server"
+            - "--requirepass"
+            - "$(REDIS_PASSWORD)"
+            - "--dir"
+            - "/bitnami/redis/data"
           resources:
             limits:
               memory: "512Mi"

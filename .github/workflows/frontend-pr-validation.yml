@@ -35,7 +35,7 @@ jobs:
           exit-code: 0
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarqube-scan-action@v3
         continue-on-error: true  # Allow PR to pass - SonarCloud needs main branch initialization
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,4 +51,6 @@ jobs:
             -Dsonar.test.inclusions=__tests__/**/*.test.js
             -Dsonar.exclusions=**/__tests__/**,**/*.config.js
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.newCode.referenceBranch=main
+            -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
+            -Dsonar.pullrequest.branch=${{ github.head_ref }}
+            -Dsonar.pullrequest.base=${{ github.base_ref }}

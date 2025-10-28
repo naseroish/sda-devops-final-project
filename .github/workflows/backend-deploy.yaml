@@ -105,4 +105,4 @@ jobs:
       - name: Smoke test
         run: |
           kubectl run curl-test --image=curlimages/curl:latest --rm -i --restart=Never -n ${{ env.NAMESPACE }} -- \
-            curl -f http://backend-service.${{ env.NAMESPACE }}.svc.cluster.local:8706/metrics || exit 1
+            curl -f http://backend-service:8706/metrics || exit 1
