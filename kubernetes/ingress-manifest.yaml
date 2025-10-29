@@ -1,24 +1,88 @@
 ---
+# Ingress for Monitoring Tools (Grafana, Prometheus, Alertmanager)
+# IMPORTANT: This must be defined BEFORE the catch-all frontend route
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-ingress
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: final.naseroish.com
+      http:
+        paths:
+          # Grafana - must match what's configured in Helm values
+          - path: /grafana
+            pathType: Prefix
+            backend:
+              service:
+                name: monitoring-prometheus-grafana
+                port:
+                  number: 80
+
+          # Prometheus
+          - path: /prometheus
+            pathType: Prefix
+            backend:
+              service:
+                name: monitoring-prometheus-kube-prometheus
+                port:
+                  number: 9090
+
+          # Alertmanager
+          - path: /alertmanager
+            pathType: Prefix
+            backend:
+              service:
+                name: monitoring-prometheus-kube-alertmanager
+                port:
+                  number: 9093
+
+---
+# Ingress for ArgoCD UI
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-ingress
+  namespace: argocd
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: final.naseroish.com
+      http:
+        paths:
+          # ArgoCD UI
+          - path: /argocd
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 443
+
+---
+# Ingress for Expensy Application
+# IMPORTANT: Frontend catch-all route (/) should be LAST
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: expensy-ingress
   namespace: expensy
   annotations:
-    # NGINX Ingress Controller annotations
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/use-regex: "true"
-
-    # Rate limiting
     nginx.ingress.kubernetes.io/rate-limit: "100"
-
-    # CORS settings (if needed)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-methods: >-
-      GET, POST, PUT, DELETE, OPTIONS
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-
-    # Timeout settings
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
@@ -28,15 +92,57 @@ spec:
     - host: final.naseroish.com
       http:
         paths:
-          # Frontend routes
+          # Backend API routes - specific paths first
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 8706
+
+          # Health check endpoint
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 8706
+
+          # Metrics endpoint
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 8706
+
+          # Frontend routes - MUST BE LAST as catch-all
           - path: /
             pathType: Prefix
             backend:
               service:
                 name: frontend-service
                 port:
-                  number: 80
+                  number: 3000
 
+---
+# IP-based access for Expensy
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: expensy-ingress-ip
+  namespace: expensy
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
           # Backend API routes
           - path: /api
             pathType: Prefix
@@ -63,44 +169,12 @@ spec:
                 name: backend-service
                 port:
                   number: 8706
----
-# Ingress for IP-based access
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: expensy-ingress-ip
-  namespace: expensy
-  annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/use-regex: "true"
-spec:
-  ingressClassName: nginx
-  rules:
-    - http:
-        paths:
-          # Frontend routes
+
+          # Frontend routes - catch-all
           - path: /
             pathType: Prefix
             backend:
               service:
                 name: frontend-service
                 port:
-                  number: 80
-
-          # Backend API routes
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: backend-service
-                port:
-                  number: 8706
-
-          # Health check endpoint
-          - path: /health
-            pathType: Prefix
-            backend:
-              service:
-                name: backend-service
-                port:
-                  number: 8706
+                  number: 3000

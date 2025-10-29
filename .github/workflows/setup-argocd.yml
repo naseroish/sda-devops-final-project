@@ -1,4 +1,4 @@
-name: ArgoCD Complete Setup & Management
+name: ArgoCD Setup
 
 on:
   workflow_dispatch:
@@ -6,35 +6,22 @@ on:
       action:
         description: 'Action to perform'
         required: true
-        default: 'setup'
+        default: 'install'
         type: choice
         options:
-          - setup
-          - sync
-          - health
+          - install
           - uninstall
-  push:
-    branches:
-      - main
-    paths:
-      - 'kubernetes/**'
-      - '.github/workflows/setup-argocd.yml'
-  schedule:
-    - cron: '0 0 * * *'
 
 env:
   ARGOCD_VERSION: v2.11.0
   ARGOCD_NAMESPACE: argocd
-  APP_NAME: expensy-aks
-  K8S_PATH: kubernetes
 
 jobs:
-  setup-and-manage:
+  setup-argocd:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-      issues: write
 
     steps:
       - name: Checkout code
@@ -51,19 +38,18 @@ jobs:
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
             --name ${{ secrets.AKS_CLUSTER_NAME }} \
             --overwrite-existing
-          kubectl cluster-info
 
-      - name: Verify AKS connectivity
+      - name: Verify cluster connectivity
+        run: kubectl cluster-info
+
+      - name: Create required namespaces
         run: |
-          kubectl get nodes
+          kubectl create namespace $ARGOCD_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace expensy --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace ingress-nginx --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Ensure namespaces exist (expensy, monitoring, argocd)
-        run: |
-          for ns in expensy monitoring $ARGOCD_NAMESPACE; do
-            kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f -
-          done
-
-      - name: Create/Update app secrets (expensy)
+      - name: Create application secrets
         run: |
           kubectl -n expensy create secret generic expensy-secrets \
             --from-literal=DATABASE_URI='${{ secrets.DATABASE_URI }}' \
@@ -72,153 +58,142 @@ jobs:
             --from-literal=MONGO_INITDB_ROOT_PASSWORD='${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}' \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Create/Update Grafana admin secret (monitoring)
-        run: |
-          kubectl -n monitoring create secret generic grafana-admin \
-            --from-literal=admin-user='admin' \
-            --from-literal=admin-password='${{ secrets.GRAFANA_ADMIN_PASSWORD }}' \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-      - name: Check ArgoCD installation
+      - name: Check if ArgoCD is installed
         id: check-argocd
         run: |
-          # Consider ArgoCD installed only if the argocd-server deployment exists
-          if kubectl get deploy argocd-server -n $ARGOCD_NAMESPACE >/dev/null 2>&1; then
+          if kubectl get deployment argocd-server -n $ARGOCD_NAMESPACE >/dev/null 2>&1; then
             echo "installed=true" >> $GITHUB_OUTPUT
-            VERSION=$(kubectl get deployment argocd-server -n $ARGOCD_NAMESPACE -o jsonpath='{.spec.template.spec.containers[0].image}' | cut -d':' -f2 || echo "unknown")
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
           else
             echo "installed=false" >> $GITHUB_OUTPUT
-            echo "ArgoCD not detected in namespace $ARGOCD_NAMESPACE (argocd-server deployment missing)." >&2
           fi
 
       - name: Install ArgoCD
-        if: steps.check-argocd.outputs.installed == 'false' && (github.event.inputs.action == 'setup' || github.event_name == 'push')
+        if: steps.check-argocd.outputs.installed == 'false' && github.event.inputs.action == 'install'
         run: |
+          echo "Installing ArgoCD $ARGOCD_VERSION..."
           kubectl apply -n $ARGOCD_NAMESPACE -f https://raw.githubusercontent.com/argoproj/argo-cd/$ARGOCD_VERSION/manifests/install.yaml
+          
+          echo "Waiting for ArgoCD to be ready..."
           kubectl wait --for=condition=available deployment/argocd-server -n $ARGOCD_NAMESPACE --timeout=600s
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=argocd-server -n $ARGOCD_NAMESPACE --timeout=600s
 
       - name: Install ArgoCD CLI
+        if: github.event.inputs.action == 'install'
         run: |
-          if ! command -v argocd &> /dev/null; then
-            curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/download/$ARGOCD_VERSION/argocd-linux-amd64
-            sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
-            rm argocd-linux-amd64
-          fi
+          echo "Installing ArgoCD CLI..."
+          curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/download/$ARGOCD_VERSION/argocd-linux-amd64
+          sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+          rm argocd-linux-amd64
           argocd version --client
 
-      - name: Wait for ArgoCD components to be ready (always)
+      - name: Setup ArgoCD port-forward and login
+        if: github.event.inputs.action == 'install'
+        id: argocd-login
         run: |
-          # These rollouts can be safely run whether ArgoCD was just installed or already present
-          kubectl rollout status deploy/argocd-server -n $ARGOCD_NAMESPACE --timeout=600s || exit 1
-          kubectl rollout status deploy/argocd-repo-server -n $ARGOCD_NAMESPACE --timeout=600s || exit 1
-          kubectl rollout status deploy/argocd-application-controller -n $ARGOCD_NAMESPACE --timeout=600s || exit 1
-
-      - name: Setup ArgoCD port-forward and get admin password
-        id: argocd-access
-        run: |
+          echo "Setting up port-forward to ArgoCD server..."
           kubectl port-forward svc/argocd-server -n $ARGOCD_NAMESPACE 8080:443 >/dev/null 2>&1 &
           echo "portforward_pid=$!" >> $GITHUB_OUTPUT
-          # Wait for port-forward to accept connections
+          
+          # Wait for port-forward to be ready
           for i in {1..20}; do
-            if curl -sk https://localhost:8080 >/dev/null; then
+            if curl -sk https://localhost:8080 >/dev/null 2>&1; then
+              echo "Port-forward is ready"
               break
             fi
-            echo "Waiting for argocd-server port-forward... ($i/20)"
+            echo "Waiting for port-forward... ($i/20)"
             sleep 3
           done
-          PW=$(kubectl -n $ARGOCD_NAMESPACE get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d || true)
-          if [ -z "$PW" ]; then PW='${{ secrets.ARGOCD_ADMIN_PASSWORD }}'; fi
-          echo "::add-mask::$PW"
-          echo "password=$PW" >> $GITHUB_OUTPUT
-
-      - name: Login to ArgoCD (with retries)
-        run: |
+          
+          # Get initial admin password
+          PASSWORD=$(kubectl -n $ARGOCD_NAMESPACE get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
+          echo "::add-mask::$PASSWORD"
+          
+          # Login to ArgoCD
+          echo "Logging in to ArgoCD..."
           for i in {1..10}; do
-            if argocd login localhost:8080 --username admin --password '${{ steps.argocd-access.outputs.password }}' --insecure; then
-              echo "Logged in to ArgoCD"
-              exit 0
+            if argocd login localhost:8080 --username admin --password "$PASSWORD" --insecure; then
+              echo "Successfully logged in to ArgoCD"
+              break
             fi
-            echo "Retrying ArgoCD login ($i/10) ..."
+            echo "Retrying ArgoCD login ($i/10)..."
             sleep 5
           done
-          echo "Failed to login to ArgoCD after retries" >&2
-          exit 1
 
-      - name: Update admin password (first install only)
-        if: steps.check-argocd.outputs.installed == 'false'
+      - name: Configure private GitHub repository in ArgoCD
+        if: github.event.inputs.action == 'install'
         run: |
-          argocd account update-password \
-            --current-password '${{ steps.argocd-access.outputs.password }}' \
-            --new-password '${{ secrets.ARGOCD_ADMIN_PASSWORD }}' || true
+          echo "Configuring private repository access..."
+          argocd repo add https://github.com/${{ github.repository }}.git \
+            --username ${{ github.actor }} \
+            --password ${{ secrets.GH_PAT }} \
+            --insecure-skip-server-verification
+          
+          echo "✅ Repository configured successfully"
+          argocd repo list
 
-      - name: Configure GitHub repo in ArgoCD (if needed)
+      - name: Configure ArgoCD to manage applications
+        if: github.event.inputs.action == 'install'
         run: |
-          if ! argocd repo list | grep -q "${{ github.repository }}"; then
-            argocd repo add https://github.com/${{ github.repository }}.git \
-              --username ${{ github.actor }} \
-              --password ${{ secrets.GH_PAT }} \
-              --insecure-skip-server-verification
-          fi
-
-      - name: Apply monitoring Applications (Prometheus/Grafana, Loki)
-        run: |
-          kubectl apply -f $K8S_PATH/monitoring-apps.yaml
-
-      - name: Create or update root ArgoCD application
-        run: |
-          cat <<EOF | kubectl apply -f -
-          apiVersion: argoproj.io/v1alpha1
-          kind: Application
-          metadata:
-            name: $APP_NAME
-            namespace: $ARGOCD_NAMESPACE
-            finalizers:
-              - resources-finalizer.argocd.argoproj.io
-          spec:
-            project: default
-            source:
-              repoURL: https://github.com/${{ github.repository }}.git
-              targetRevision: ${{ github.ref_name }}
-              path: $K8S_PATH
-            destination:
-              server: https://kubernetes.default.svc
-              namespace: default
-            syncPolicy:
-              automated:
-                prune: true
-                selfHeal: true
-                allowEmpty: false
-              syncOptions:
-                - CreateNamespace=true
-                - PruneLast=true
-          EOF
-
-      - name: Sync applications
-        if: github.event.inputs.action == 'sync' || github.event.inputs.action == 'setup' || github.event_name == 'push'
-        run: |
-          argocd app sync $APP_NAME --timeout 600 --retry-limit 3
-          # Sync monitoring apps explicitly as they are separate Applications
+          echo "Applying ArgoCD application manifests..."
+          kubectl apply -f kubernetes/argocd.yaml
+          
+          echo "Syncing applications..."
+          argocd app sync expensy-app --timeout 600 --retry-limit 3 || true
           argocd app sync monitoring-prometheus --timeout 600 --retry-limit 3 || true
           argocd app sync monitoring-loki --timeout 600 --retry-limit 3 || true
+          argocd app sync ingress-nginx --timeout 600 --retry-limit 3 || true
+          argocd app sync argocd-ui --timeout 600 --retry-limit 3 || true
+          
+          echo "✅ ArgoCD is now managing all applications!"
+          echo "ArgoCD will automatically:"
+          echo "  - Deploy and manage Expensy app (frontend, backend, MongoDB, Redis)"
+          echo "  - Deploy Prometheus & Grafana for monitoring"
+          echo "  - Deploy Loki for log aggregation"
+          echo "  - Deploy NGINX Ingress Controller"
+          echo "  - Deploy ArgoCD UI with subpath support"
+          echo "  - Auto-sync changes from Git"
+          echo "  - Self-heal any manual changes"
 
-      - name: Wait for health
-        if: github.event.inputs.action == 'sync' || github.event.inputs.action == 'setup' || github.event_name == 'push'
+      - name: Get ArgoCD admin password
+        if: steps.check-argocd.outputs.installed == 'false' && github.event.inputs.action == 'install'
         run: |
-          argocd app wait $APP_NAME --health --timeout 600
-          argocd app wait monitoring-prometheus --health --timeout 600 || true
-          argocd app wait monitoring-loki --health --timeout 600 || true
+          echo "Getting ArgoCD admin password..."
+          PASSWORD=$(kubectl -n $ARGOCD_NAMESPACE get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
+          echo "::add-mask::$PASSWORD"
+          echo "ARGOCD_PASSWORD=$PASSWORD" >> $GITHUB_ENV
+          echo ""
+          echo "=========================================="
+          echo "ArgoCD Setup Complete!"
+          echo "=========================================="
+          echo "Username: admin"
+          echo "Password: (stored in argocd-initial-admin-secret)"
+          echo ""
+          echo "To access ArgoCD UI:"
+          echo "1. Via Ingress: https://final.naseroish.com/argocd"
+          echo "2. Via port-forward: kubectl port-forward svc/argocd-server -n argocd 8080:443"
+          echo "   Then visit: https://localhost:8080"
+
+      - name: Cleanup port-forward
+        if: always() && github.event.inputs.action == 'install'
+        run: |
+          if [ -n "${{ steps.argocd-login.outputs.portforward_pid }}" ]; then
+            kill ${{ steps.argocd-login.outputs.portforward_pid }} 2>/dev/null || true
+          fi
 
       - name: Uninstall ArgoCD
         if: github.event.inputs.action == 'uninstall'
         run: |
-          kubectl delete application $APP_NAME -n $ARGOCD_NAMESPACE || true
-          kubectl delete -f https://raw.githubusercontent.com/argoproj/argo-cd/$ARGOCD_VERSION/manifests/install.yaml -n $ARGOCD_NAMESPACE || true
-          kubectl delete namespace $ARGOCD_NAMESPACE || true
+          echo "Removing ArgoCD applications..."
+          kubectl delete -f kubernetes/argocd.yaml --ignore-not-found=true
+          
+          echo "Waiting for applications to be removed..."
+          sleep 30
+          
+          echo "Uninstalling ArgoCD..."
+          kubectl delete -n $ARGOCD_NAMESPACE -f https://raw.githubusercontent.com/argoproj/argo-cd/$ARGOCD_VERSION/manifests/install.yaml --ignore-not-found=true
+          
+          echo "Removing ArgoCD namespace..."
+          kubectl delete namespace $ARGOCD_NAMESPACE --ignore-not-found=true
+          
+          echo "✅ ArgoCD has been uninstalled"
 
-      - name: Cleanup port-forward
-        if: always()
-        run: |
-          if [ -n "${{ steps.argocd-access.outputs.portforward_pid }}" ]; then
-            kill ${{ steps.argocd-access.outputs.portforward_pid }} 2>/dev/null || true
-          fi
