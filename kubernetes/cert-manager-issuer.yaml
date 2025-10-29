@@ -10,7 +10,7 @@ spec:
     server: https://acme-v02.api.letsencrypt.org/directory
     
     # Email for certificate expiration notifications
-    email: your-email@example.com  # CHANGE THIS to your email
+    email: naseroish@gmail.com
     
     # Secret to store the ACME account private key
     privateKeySecretRef:
