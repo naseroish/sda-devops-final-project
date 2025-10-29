@@ -37,7 +37,7 @@ spec:
         maxDuration: 3m
 
 ---
-# Prometheus & Grafana via Helm
+# Prometheus & Grafana via Helm with LoadBalancer services
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -61,14 +61,18 @@ spec:
             enabled: true
             size: 10Gi
           service:
-            type: ClusterIP
+            type: LoadBalancer
+            annotations:
+              service.beta.kubernetes.io/azure-dns-label-name: grafana-naseroish
           grafana.ini:
             server:
-              root_url: "https://final.naseroish.com/grafana"
-              serve_from_sub_path: true
-          ingress:
-            enabled: false
+              root_url: "https://grafana.naseroish.com"
+              domain: grafana.naseroish.com
         prometheus:
+          service:
+            type: LoadBalancer
+            annotations:
+              service.beta.kubernetes.io/azure-dns-label-name: prometheus-naseroish
           prometheusSpec:
             retention: 30d
             storageSpec:
@@ -78,17 +82,15 @@ spec:
                   resources:
                     requests:
                       storage: 50Gi
-            externalUrl: "http://final.naseroish.com/prometheus"
-            routePrefix: /prometheus
-          ingress:
-            enabled: false
+            externalUrl: "https://prometheus.naseroish.com"
         alertmanager:
           enabled: true
+          service:
+            type: LoadBalancer
+            annotations:
+              service.beta.kubernetes.io/azure-dns-label-name: alertmanager-naseroish
           alertmanagerSpec:
-            externalUrl: "http://final.naseroish.com/alertmanager"
-            routePrefix: /alertmanager
-          ingress:
-            enabled: false
+            externalUrl: "https://alertmanager.naseroish.com"
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
@@ -180,7 +182,7 @@ spec:
       limit: 3
 
 ---
-# ArgoCD UI via Helm - Ingress DISABLED (managed manually)
+# ArgoCD UI via Helm - LoadBalancer service with subdomain
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -198,14 +200,14 @@ spec:
       releaseName: argocd-ui
       values: |
         server:
+          service:
+            type: LoadBalancer
+            annotations:
+              service.beta.kubernetes.io/azure-dns-label-name: argocd-naseroish
           ingress:
             enabled: false
-          baseHref: /argocd
-          rootpath: /argocd
-        configs:
-          params:
-            server.basehref: /argocd
-            server.rootpath: /argocd
+          extraArgs:
+            - --insecure
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
