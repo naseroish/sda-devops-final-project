@@ -67,7 +67,6 @@ spec:
           grafana.ini:
             server:
               root_url: "https://grafana.naseroish.com"
-              domain: grafana.naseroish.com
         prometheus:
           service:
             type: LoadBalancer
