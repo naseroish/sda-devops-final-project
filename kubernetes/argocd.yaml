@@ -59,7 +59,11 @@ spec:
           adminPassword: admin
           persistence:
             enabled: true
+            type: pvc
             size: 10Gi
+            storageClassName: default
+            accessModes:
+              - ReadWriteOnce
           service:
             type: LoadBalancer
             annotations:
@@ -67,6 +71,7 @@ spec:
           grafana.ini:
             server:
               root_url: "https://grafana.naseroish.com"
+              serve_from_sub_path: false
         prometheus:
           service:
             type: LoadBalancer
