@@ -64,7 +64,7 @@ spec:
             type: ClusterIP
           grafana.ini:
             server:
-              root_url: "%(protocol)s://%(domain)s/grafana"
+              root_url: "https://final.naseroish.com/grafana"
               serve_from_sub_path: true
           ingress:
             enabled: false
