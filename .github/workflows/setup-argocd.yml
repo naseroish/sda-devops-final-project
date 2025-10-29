@@ -13,7 +13,7 @@ on:
           - uninstall
 
 env:
-  ARGOCD_VERSION: stable
+  ARGOCD_VERSION: v3.1.9
   ARGOCD_NAMESPACE: argocd
 
 jobs:
