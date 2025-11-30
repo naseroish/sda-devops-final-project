@@ -81,15 +81,21 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
+      # Cache Terraform state for local backend
+      - name: Cache Terraform State
+        uses: actions/cache@v3
+        with:
+          path: terraform/${{ github.event.inputs.cloud_provider }}/terraform.tfstate*
+          key: terraform-${{ github.event.inputs.cloud_provider }}-${{ github.event.inputs.terraform_workspace }}-${{ hashFiles('terraform/${{ github.event.inputs.cloud_provider }}/**/*.tf') }}
+          restore-keys: |
+            terraform-${{ github.event.inputs.cloud_provider }}-${{ github.event.inputs.terraform_workspace }}-
+
       - name: Terraform Init
         working-directory: terraform/${{ github.event.inputs.cloud_provider }}
         run: |
           terraform init
           terraform workspace select ${{ github.event.inputs.terraform_workspace }} || terraform workspace new ${{ github.event.inputs.terraform_workspace }}
         env:
-          # DigitalOcean Spaces credentials (for state backend)
-          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
           # Cloud provider tokens
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -103,8 +109,6 @@ jobs:
         run: terraform plan -out=tfplan
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_ACCESS_KEY || secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_SECRET_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Terraform Apply
         if: github.event.inputs.action == 'deploy'
@@ -112,8 +116,6 @@ jobs:
         run: terraform apply -auto-approve tfplan
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_ACCESS_KEY || secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_SECRET_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Terraform Destroy
         if: github.event.inputs.action == 'destroy'
@@ -121,8 +123,15 @@ jobs:
         run: terraform destroy -auto-approve
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_ACCESS_KEY || secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_SECRET_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
+      
+      # Save Terraform state back to cache
+      - name: Upload Terraform State
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: terraform-state-${{ github.event.inputs.cloud_provider }}-${{ github.event.inputs.terraform_workspace }}
+          path: terraform/${{ github.event.inputs.cloud_provider }}/terraform.tfstate*
+          retention-days: 30
 
       # ==================== Get Kubeconfig ====================
       - name: Get DigitalOcean Kubeconfig

@@ -10,18 +10,30 @@ terraform {
     }
   }
   
-  backend "s3" {
-    skip_credentials_validation = true
-    skip_metadata_api_check     = true
-    endpoint                    = "https://nyc3.digitaloceanspaces.com"
-    region                      = "us-east-1" # DigitalOcean Spaces uses this for compatibility
-    bucket                      = "expensy-terraform-state"
-    key                         = "digitalocean/terraform.tfstate"
-    
-    # Set via environment variables:
-    # AWS_ACCESS_KEY_ID = DigitalOcean Spaces Access Key
-    # AWS_SECRET_ACCESS_KEY = DigitalOcean Spaces Secret Key
+  # Local backend (simpler for now - can migrate to Spaces later)
+  backend "local" {
+    path = "terraform.tfstate"
   }
+  
+  # Uncomment below to use DigitalOcean Spaces for remote state
+  # backend "s3" {
+  #   skip_credentials_validation = true
+  #   skip_metadata_api_check     = true
+  #   skip_requesting_account_id  = true
+  #   skip_s3_checksum            = true
+  #   
+  #   endpoints = {
+  #     s3 = "https://nyc3.digitaloceanspaces.com"
+  #   }
+  #   
+  #   region = "us-east-1"
+  #   bucket = "expensy-terraform-state"
+  #   key    = "digitalocean/terraform.tfstate"
+  #   
+  #   # Set via environment variables:
+  #   # AWS_ACCESS_KEY_ID = DigitalOcean Spaces Access Key
+  #   # AWS_SECRET_ACCESS_KEY = DigitalOcean Spaces Secret Key
+  # }
 }
 
 provider "digitalocean" {
