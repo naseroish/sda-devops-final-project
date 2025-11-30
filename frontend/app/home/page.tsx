@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
-import { ChartTooltipContent, ChartTooltip, ChartContainer } from "@/components/ui/chart"
+import { ChartTooltipContent, ChartTooltip, ChartContainer, ChartConfig } from "@/components/ui/chart"
 import { Pie, PieChart, Cell } from "recharts"
 import { addExpensesAPI, fetchExpensesAPI } from "@/api/expensesapi"
 
@@ -290,10 +290,30 @@ export default function Component() {
           <Card>
             <CardHeader>
               <CardTitle>Breakdown</CardTitle>
+              <CardDescription>Visual breakdown of expenses by category</CardDescription>
             </CardHeader>
-            <CardContent className="flex justify-center">
+            <CardContent className="flex flex-col items-center justify-center pb-8">
               {categoriesData.length > 0 ? (
-                <PiechartcustomChart data={categoriesData} categoryColors={categoryColors} />
+                <>
+                  <PiechartcustomChart data={categoriesData} categoryColors={categoryColors} />
+                  <div className="mt-6 w-full space-y-2">
+                    {categoriesData.map((category) => {
+                      const percentage = totalExpenses > 0 ? Math.round((category.amount / totalExpenses) * 100) : 0
+                      return (
+                        <div key={category.name} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-3 h-3 border-2 border-border"
+                              style={{ backgroundColor: categoryColors[category.name] }}
+                            />
+                            <span className="font-bold">{category.name}</span>
+                          </div>
+                          <span className="font-black">{percentage}%</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
               ) : (
                 <div className="text-center py-12">
                   <div className="text-6xl mb-4">📊</div>
@@ -378,22 +398,35 @@ export default function Component() {
 }
 
 function PiechartcustomChart({ data, categoryColors }: { data: { name: string; amount: number }[]; categoryColors: { [key: string]: string } }) {
+  const chartConfig = useMemo(() => {
+    return data.reduce((config, category) => {
+      config[category.name] = {
+        label: category.name,
+        color: categoryColors[category.name],
+      }
+      return config
+    }, {} as ChartConfig)
+  }, [data, categoryColors])
+
   return (
-    <div className="w-full max-w-[280px]">
-      <ChartContainer config={{}}>
+    <div className="w-full max-w-[320px]">
+      <ChartContainer config={chartConfig} className="mx-auto h-[320px] w-full">
         <PieChart>
-          <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+          <ChartTooltip 
+            cursor={false} 
+            content={<ChartTooltipContent hideLabel formatter={(value) => `$${Number(value).toFixed(2)}`} />} 
+          />
           <Pie
             data={data}
             dataKey="amount"
             nameKey="name"
             cx="50%"
             cy="50%"
-            innerRadius={60}
-            outerRadius={100}
-            paddingAngle={3}
-            strokeWidth={4}
-            stroke="oklch(0 0 0)"
+            innerRadius={70}
+            outerRadius={110}
+            paddingAngle={4}
+            strokeWidth={3}
+            stroke="hsl(var(--background))"
           >
             {data.map((entry, index) => (
               <Cell
