@@ -134,6 +134,9 @@ jobs:
           echo "Deleting Kubernetes clusters..."
           doctl kubernetes cluster list --format ID,Name --no-header | grep "expensy" | awk '{print $1}' | xargs -r -I {} doctl kubernetes cluster delete {} --force || true
           
+          # Wait for cluster deletion to complete
+          sleep 10
+          
           # Delete load balancers
           echo "Deleting load balancers..."
           doctl compute load-balancer list --format ID,Name --no-header | grep "expensy" | awk '{print $1}' | xargs -r -I {} doctl compute load-balancer delete {} --force || true
@@ -142,16 +145,18 @@ jobs:
           echo "Deleting firewalls..."
           doctl compute firewall list --format ID,Name --no-header | grep "expensy" | awk '{print $1}' | xargs -r -I {} doctl compute firewall delete {} --force || true
           
-          # Delete VPCs
+          # Delete VPCs (skip default VPCs)
           echo "Deleting VPCs..."
-          doctl vpcs list --format ID,Name --no-header | grep "expensy" | awk '{print $1}' | xargs -r -I {} doctl vpcs delete {} --force || true
+          doctl vpcs list --format ID,Name,Default --no-header | grep "expensy" | grep -v "true" | awk '{print $1}' | xargs -r -I {} doctl vpcs delete {} --force || true
           
           # Delete container registry (WARNING: This deletes all images!)
           echo "Deleting container registry..."
           doctl registry delete --force || true
           
-          # Clean up terraform state
-          rm -f terraform/${{ github.event.inputs.cloud_provider }}/terraform.tfstate*
+          # Clean up terraform state files and directories
+          echo "Cleaning up Terraform state..."
+          rm -rf terraform/${{ github.event.inputs.cloud_provider }}/terraform.tfstate*
+          rm -rf terraform/${{ github.event.inputs.cloud_provider }}/.terraform
           
           echo "✅ Cleanup complete! You can now run 'deploy' action."
         env:
