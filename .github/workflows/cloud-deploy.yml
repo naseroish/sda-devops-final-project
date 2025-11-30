@@ -127,7 +127,7 @@ jobs:
       # Save Terraform state back to cache
       - name: Upload Terraform State
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: terraform-state-${{ github.event.inputs.cloud_provider }}-${{ github.event.inputs.terraform_workspace }}
           path: terraform/${{ github.event.inputs.cloud_provider }}/terraform.tfstate*
