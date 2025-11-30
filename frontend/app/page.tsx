@@ -5,24 +5,24 @@ import { buttonVariants } from "@/components/ui/button"
 
 export default function IndexPage() {
   return (
-    <div className="h-[calc(100vh-4rem)] flex items-center justify-center px-4">
+    <div className="flex h-[calc(100vh-4rem)] items-center justify-center px-4">
       <div className="container max-w-7xl">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="grid items-center gap-12 lg:grid-cols-2">
           {/* Left Column - Hero Content */}
-          <div className="space-y-6 animate-slide-up">
+          <div className="animate-slide-up space-y-6">
             <div className="inline-block border-4 border-border bg-accent px-4 py-2 shadow-md">
               <span className="text-sm font-black uppercase tracking-wider text-accent-foreground">Free • Secure • Fast</span>
             </div>
             
-            <h1 className="text-5xl md:text-7xl font-black leading-none uppercase tracking-tight">
+            <h1 className="text-5xl font-black uppercase leading-none tracking-tight md:text-7xl">
               Track Your
               <br />
-              <span className="inline-block border-8 border-border bg-primary text-primary-foreground px-4 py-2 shadow-2xl mt-2">
+              <span className="mt-2 inline-block border-8 border-border bg-primary px-4 py-2 text-primary-foreground shadow-2xl">
                 Expenses
               </span>
             </h1>
             
-            <p className="text-xl md:text-2xl font-bold max-w-lg">
+            <p className="max-w-lg text-xl font-bold md:text-2xl">
               Simple, powerful expense tracking. 
               No fluff, just results.
             </p>
@@ -53,29 +53,29 @@ export default function IndexPage() {
           </div>
 
           {/* Right Column - Feature Grid */}
-          <div className="grid grid-cols-2 gap-4 animate-pop-in" style={{ animationDelay: "0.2s" }}>
-            <div className="border-4 border-border bg-primary p-6 shadow-lg hover:translate-x-1 hover:translate-y-1 hover:shadow-md transition-all">
+          <div className="animate-pop-in grid grid-cols-2 gap-4" style={{ animationDelay: "0.2s" }}>
+            <div className="border-4 border-border bg-primary p-6 shadow-lg transition-all hover:translate-x-1 hover:translate-y-1 hover:shadow-md">
               <div className="text-5xl font-black text-primary-foreground">∞</div>
-              <div className="text-xl font-black text-primary-foreground mt-3 uppercase">Unlimited</div>
-              <p className="text-sm font-bold text-primary-foreground mt-1">Track as much as you want</p>
+              <div className="mt-3 text-xl font-black uppercase text-primary-foreground">Unlimited</div>
+              <p className="mt-1 text-sm font-bold text-primary-foreground">Track as much as you want</p>
             </div>
 
-            <div className="border-4 border-border bg-accent p-6 shadow-lg hover:translate-x-1 hover:translate-y-1 hover:shadow-md transition-all">
+            <div className="border-4 border-border bg-accent p-6 shadow-lg transition-all hover:translate-x-1 hover:translate-y-1 hover:shadow-md">
               <div className="text-5xl font-black text-accent-foreground">⚡</div>
-              <div className="text-xl font-black text-accent-foreground mt-3 uppercase">Lightning</div>
-              <p className="text-sm font-bold text-accent-foreground/80 mt-1">Blazing fast performance</p>
+              <div className="mt-3 text-xl font-black uppercase text-accent-foreground">Lightning</div>
+              <p className="text-accent-foreground/80 mt-1 text-sm font-bold">Blazing fast performance</p>
             </div>
 
-            <div className="border-4 border-border bg-secondary p-6 shadow-lg hover:translate-x-1 hover:translate-y-1 hover:shadow-md transition-all">
+            <div className="border-4 border-border bg-secondary p-6 shadow-lg transition-all hover:translate-x-1 hover:translate-y-1 hover:shadow-md">
               <div className="text-5xl font-black text-secondary-foreground">🔒</div>
-              <div className="text-xl font-black text-secondary-foreground mt-3 uppercase">Secure</div>
-              <p className="text-sm font-bold text-secondary-foreground/80 mt-1">Your data, protected</p>
+              <div className="mt-3 text-xl font-black uppercase text-secondary-foreground">Secure</div>
+              <p className="text-secondary-foreground/80 mt-1 text-sm font-bold">Your data, protected</p>
             </div>
 
-            <div className="border-4 border-border bg-secondary-foreground p-6 shadow-lg hover:translate-x-1 hover:translate-y-1 hover:shadow-md transition-all">
+            <div className="border-4 border-border bg-secondary-foreground p-6 shadow-lg transition-all hover:translate-x-1 hover:translate-y-1 hover:shadow-md">
               <div className="text-5xl font-black text-primary-foreground">📊</div>
-              <div className="text-xl font-black mt-3 uppercase text-primary-foreground">Insights</div>
-              <p className="text-sm font-bold text-primary-foreground mt-1">Visual breakdowns</p>
+              <div className="mt-3 text-xl font-black uppercase text-primary-foreground">Insights</div>
+              <p className="mt-1 text-sm font-bold text-primary-foreground">Visual breakdowns</p>
             </div>
           </div>
         </div>

@@ -1,6 +1,9 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import expenseRoutes from './routes/expense.route';
+import budgetRoutes from './routes/budget.route';
+import goalRoutes from './routes/goal.route';
+import walletRoutes from './routes/wallet.route';
 import connectDB from './config/db.config';
 import cors from 'cors';
 import client from 'prom-client';
@@ -18,6 +21,9 @@ app.get('/api', (req, res) => {
   });
   
 app.use('/api', expenseRoutes);
+app.use('/api', budgetRoutes);
+app.use('/api', goalRoutes);
+app.use('/api', walletRoutes);
 
 client.collectDefaultMetrics();
 

@@ -1,0 +1,63 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: expensy-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: expensy
+      MONGO_INITDB_ROOT_PASSWORD: expensy-pass
+      MONGO_INITDB_DATABASE: expensy
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - expensy-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: expensy-redis
+    command: redis-server --save 20 1 --loglevel warning
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - expensy-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: expensy-backend
+    depends_on:
+      - mongo
+      - redis
+    environment:
+      PORT: 8706
+      DATABASE_URI: mongodb://expensy:expensy-pass@mongo:27017/expensy?authSource=admin
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "8706:8706"
+    restart: unless-stopped
+    networks:
+      - expensy-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: expensy-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - expensy-net
+
+volumes:
+  mongo-data:
+  redis-data:
+
+networks:
+  expensy-net:
+    driver: bridge
