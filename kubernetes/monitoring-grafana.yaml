@@ -1,0 +1,194 @@
+---
+# Grafana for visualization and dashboards
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    chart: grafana
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: 10.2.0  # Latest stable version (App: 12.3.0)
+    helm:
+      releaseName: grafana
+      values: |
+        # Admin credentials
+        adminUser: admin
+        adminPassword: admin  # Change this in production!
+
+        # Persistence
+        persistence:
+          enabled: true
+          # Storage class: Use 'managed-csi' for Azure, 'do-block-storage' for DigitalOcean
+          storageClassName: do-block-storage
+          size: 10Gi
+          accessModes:
+            - ReadWriteOnce
+
+        # Resources
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+        # Service configuration
+        service:
+          type: LoadBalancer
+          port: 80
+          targetPort: 3000
+          annotations:
+            service.beta.kubernetes.io/azure-dns-label-name: grafana-naseroish
+
+        # Datasources - pre-configure all monitoring tools
+        datasources:
+          datasources.yaml:
+            apiVersion: 1
+            datasources:
+              # Prometheus datasource
+              - name: Prometheus
+                type: prometheus
+                access: proxy
+                url: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+                isDefault: true
+                jsonData:
+                  timeInterval: 30s
+                editable: true
+
+              # Loki datasource
+              - name: Loki
+                type: loki
+                access: proxy
+                url: http://loki-gateway.monitoring.svc.cluster.local
+                jsonData:
+                  maxLines: 1000
+                editable: true
+
+              # Elasticsearch datasource
+              - name: Elasticsearch
+                type: elasticsearch
+                access: proxy
+                url: http://elasticsearch-master.monitoring.svc.cluster.local:9200
+                database: "[logs-]YYYY.MM.DD"
+                jsonData:
+                  timeField: "@timestamp"
+                  esVersion: "8.5.1"
+                  logMessageField: message
+                  logLevelField: level
+                editable: true
+
+        # Dashboard providers
+        dashboardProviders:
+          dashboardproviders.yaml:
+            apiVersion: 1
+            providers:
+              - name: 'default'
+                orgId: 1
+                folder: ''
+                type: file
+                disableDeletion: false
+                updateIntervalSeconds: 10
+                allowUiUpdates: true
+                options:
+                  path: /var/lib/grafana/dashboards/default
+
+              - name: 'kubernetes'
+                orgId: 1
+                folder: 'Kubernetes'
+                type: file
+                disableDeletion: false
+                updateIntervalSeconds: 10
+                allowUiUpdates: true
+                options:
+                  path: /var/lib/grafana/dashboards/kubernetes
+
+        # Pre-load dashboards
+        dashboards:
+          default:
+            prometheus-stats:
+              gnetId: 2
+              revision: 2
+              datasource: Prometheus
+            node-exporter:
+              gnetId: 1860
+              revision: 31
+              datasource: Prometheus
+          kubernetes:
+            kubernetes-cluster-monitoring:
+              gnetId: 7249
+              revision: 1
+              datasource: Prometheus
+            kubernetes-pod-monitoring:
+              gnetId: 6417
+              revision: 1
+              datasource: Prometheus
+
+        # Plugins to install
+        plugins:
+          - grafana-piechart-panel
+          - grafana-clock-panel
+          - grafana-simple-json-datasource
+
+        # Environment variables
+        env:
+          GF_SECURITY_ALLOW_EMBEDDING: "true"
+          GF_AUTH_ANONYMOUS_ENABLED: "false"
+          GF_SECURITY_ADMIN_PASSWORD: admin  # Change in production
+          GF_INSTALL_PLUGINS: ""
+
+        # SMTP configuration (optional)
+        smtp:
+          enabled: false
+
+        # Sidecar for dynamic dashboard loading
+        sidecar:
+          dashboards:
+            enabled: true
+            label: grafana_dashboard
+            labelValue: "1"
+            searchNamespace: ALL
+          datasources:
+            enabled: true
+            label: grafana_datasource
+            labelValue: "1"
+            searchNamespace: ALL
+
+        # Image pull policy
+        image:
+          pullPolicy: IfNotPresent
+
+        # Service account
+        serviceAccount:
+          create: true
+          name: grafana
+
+        # Ingress (optional - we're using LoadBalancer)
+        ingress:
+          enabled: false
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

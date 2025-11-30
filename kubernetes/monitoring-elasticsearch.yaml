@@ -1,0 +1,180 @@
+---
+# Elasticsearch for log storage and search via Helm
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: elasticsearch
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    chart: elasticsearch
+    repoURL: https://helm.elastic.co
+    targetRevision: 8.5.1  # Stable version (App: 8.5.1)
+    helm:
+      releaseName: elasticsearch
+      values: |
+        # Cluster configuration
+        clusterName: "elasticsearch"
+        nodeGroup: "master"
+        
+        # Replica configuration
+        # Single node for development (increase for production)
+        replicas: 1
+        minimumMasterNodes: 1
+        
+        # Resources - adjusted for better performance
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "2Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
+        
+        # JVM Heap settings (should be 50% of memory limits)
+        esJavaOpts: "-Xmx2g -Xms2g"
+        
+        # Persistence
+        persistence:
+          enabled: true
+        
+        # Volume claim template
+        volumeClaimTemplate:
+          # Storage class: Use 'managed-csi' for Azure, 'do-block-storage' for DigitalOcean
+          storageClassName: "do-block-storage"
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 30Gi
+        
+        # Security configuration (disabled for simplicity, enable in production)
+        esConfig:
+          elasticsearch.yml: |
+            # Disable security for dev environment
+            xpack.security.enabled: false
+            xpack.security.transport.ssl.enabled: false
+            xpack.security.http.ssl.enabled: false
+            
+            # Enable monitoring
+            xpack.monitoring.collection.enabled: true
+            
+            # Index lifecycle management
+            action.destructive_requires_name: true
+            
+            # Network settings
+            network.host: 0.0.0.0
+            
+            # Discovery settings
+            discovery.type: single-node
+            
+            # Index settings
+            indices.query.bool.max_clause_count: 10000
+        
+        # Service configuration
+        service:
+          type: ClusterIP
+          httpPort: 9200
+          transportPort: 9300
+          labels: {}
+          annotations: {}
+        
+        # Health checks - tuned for better startup
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 3
+          timeoutSeconds: 5
+        
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        
+        # Startup probe for slow startup times
+        startupProbe:
+          failureThreshold: 30
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        
+        # Lifecycle hooks
+        lifecycle:
+          postStart:
+            exec:
+              command:
+                - bash
+                - -c
+                - |
+                  #!/bin/bash
+                  # Wait for Elasticsearch to be ready
+                  until curl -s http://localhost:9200/_cluster/health | grep -q '"status":"green\|yellow"'; do
+                    echo "Waiting for Elasticsearch to be ready..."
+                    sleep 5
+                  done
+                  echo "Elasticsearch is ready!"
+        
+        # Init container to set vm.max_map_count
+        sysctlInitContainer:
+          enabled: true
+        
+        # Anti-affinity to spread replicas across nodes
+        antiAffinity: "soft"
+        
+        # Pod disruption budget
+        maxUnavailable: 1
+        
+        # Update strategy
+        updateStrategy: RollingUpdate
+        
+        # Node selector (optional)
+        nodeSelector: {}
+        
+        # Tolerations (optional)
+        tolerations: []
+        
+        # Security context
+        podSecurityContext:
+          fsGroup: 1000
+          runAsUser: 1000
+        
+        securityContext:
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+        
+        # ServiceMonitor for Prometheus monitoring
+        # Requires Prometheus Operator
+        # serviceMonitor:
+        #   enabled: true
+        #   labels:
+        #     release: prometheus
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -3,6 +3,16 @@ name: ArgoCD Setup
 on:
   workflow_dispatch:
     inputs:
+      cloud_provider:
+        description: 'Cloud Provider'
+        required: true
+        type: choice
+        options:
+          - digitalocean
+          - azure
+          - aws
+          - gcp
+        default: 'digitalocean'
       action:
         description: 'Action to perform'
         required: true
@@ -27,20 +37,67 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # ==================== DigitalOcean Setup ====================
+      - name: Setup DigitalOcean CLI
+        if: github.event.inputs.cloud_provider == 'digitalocean'
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
+      - name: Get DOKS credentials
+        if: github.event.inputs.cloud_provider == 'digitalocean'
+        run: |
+          doctl kubernetes cluster kubeconfig save ${{ secrets.DOKS_CLUSTER_NAME }}
+
+      # ==================== Azure Setup ====================
       - name: Azure Login
+        if: github.event.inputs.cloud_provider == 'azure'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Get AKS credentials
+        if: github.event.inputs.cloud_provider == 'azure'
         run: |
           az aks get-credentials \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
             --name ${{ secrets.AKS_CLUSTER_NAME }} \
             --overwrite-existing
 
+      # ==================== AWS Setup ====================
+      - name: Configure AWS Credentials
+        if: github.event.inputs.cloud_provider == 'aws'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Get EKS credentials
+        if: github.event.inputs.cloud_provider == 'aws'
+        run: |
+          aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+
+      # ==================== GCP Setup ====================
+      - name: Authenticate to Google Cloud
+        if: github.event.inputs.cloud_provider == 'gcp'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Get GKE credentials
+        if: github.event.inputs.cloud_provider == 'gcp'
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ secrets.GKE_CLUSTER_NAME }}
+          location: ${{ secrets.GCP_REGION }}
+
+      # ==================== Verify Cluster ====================
       - name: Verify cluster connectivity
-        run: kubectl cluster-info
+        run: |
+          echo "Connected to ${{ github.event.inputs.cloud_provider }} Kubernetes cluster"
+          kubectl cluster-info
+          kubectl get nodes
 
       - name: Create required namespaces
         run: |
@@ -134,25 +191,30 @@ jobs:
       - name: Configure ArgoCD to manage applications
         if: github.event.inputs.action == 'install'
         run: |
-          echo "Applying ArgoCD application manifests..."
+          echo "Applying ArgoCD root application (App of Apps pattern)..."
           kubectl apply -f kubernetes/argocd.yaml
           
-          echo "Syncing applications..."
-          argocd app sync expensy-app --timeout 600 --retry-limit 3 || true
-          argocd app sync monitoring-prometheus --timeout 600 --retry-limit 3 || true
-          argocd app sync monitoring-loki --timeout 600 --retry-limit 3 || true
-          argocd app sync ingress-nginx --timeout 600 --retry-limit 3 || true
-          argocd app sync argocd-ui --timeout 600 --retry-limit 3 || true
+          echo "Waiting for ArgoCD to discover all applications..."
+          sleep 10
           
           echo "✅ ArgoCD is now managing all applications!"
-          echo "ArgoCD will automatically:"
-          echo "  - Deploy and manage Expensy app (frontend, backend, MongoDB, Redis)"
-          echo "  - Deploy Prometheus & Grafana for monitoring"
-          echo "  - Deploy Loki for log aggregation"
-          echo "  - Deploy NGINX Ingress Controller"
-          echo "  - Deploy ArgoCD UI with subpath support"
-          echo "  - Auto-sync changes from Git"
-          echo "  - Self-heal any manual changes"
+          echo ""
+          echo "ArgoCD will automatically discover and deploy:"
+          echo "  ✅ Expensy app (frontend, backend, MongoDB, Redis)"
+          echo "  ✅ Prometheus stack (Prometheus, Alertmanager, Node Exporter)"
+          echo "  ✅ Grafana with pre-configured datasources"
+          echo "  ✅ Loki for log aggregation with Promtail"
+          echo "  ✅ Elasticsearch for log storage"
+          echo "  ✅ NGINX Ingress Controller"
+          echo "  ✅ cert-manager for SSL certificates"
+          echo "  ✅ ArgoCD UI with LoadBalancer"
+          echo ""
+          echo "ArgoCD features enabled:"
+          echo "  🔄 Auto-sync: Changes from Git are automatically deployed"
+          echo "  🔧 Self-heal: Manual changes are automatically reverted"
+          echo "  🗑️  Auto-prune: Deleted resources in Git are removed from cluster"
+          echo ""
+          echo "All application manifests in kubernetes/ folder are managed by ArgoCD!"
 
       - name: Get ArgoCD admin password
         if: steps.check-argocd.outputs.installed == 'false' && github.event.inputs.action == 'install'
@@ -180,22 +242,13 @@ jobs:
           echo "   - Azure DNS: grafana-naseroish.<region>.cloudapp.azure.com"
           echo "   - Configure Cloudflare CNAME: grafana.naseroish.com → grafana-naseroish.<region>.cloudapp.azure.com"
           echo ""
-          echo "3. Prometheus:"
-          echo "   - Azure DNS: prometheus-naseroish.<region>.cloudapp.azure.com"
-          echo "   - Configure Cloudflare CNAME: prometheus.naseroish.com → prometheus-naseroish.<region>.cloudapp.azure.com"
-          echo ""
-          echo "4. Alertmanager:"
-          echo "   - Azure DNS: alertmanager-naseroish.<region>.cloudapp.azure.com"
-          echo "   - Configure Cloudflare CNAME: alertmanager.naseroish.com → alertmanager-naseroish.<region>.cloudapp.azure.com"
-          echo ""
-          echo "5. Expensy App (via NGINX Ingress):"
+          echo "3. Expensy App (via NGINX Ingress):"
           echo "   - Your existing final.naseroish.com setup remains unchanged"
           echo ""
-          echo "To get the actual Azure DNS names, run:"
-          echo "  kubectl get svc -n argocd argocd-ui-argo-cd-argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].ip}'"
-          echo "  kubectl get svc -n monitoring monitoring-prometheus-grafana -o jsonpath='{.status.loadBalancer.ingress[0].ip}'"
-          echo "  kubectl get svc -n monitoring monitoring-prometheus-kube-prometheus -o jsonpath='{.status.loadBalancer.ingress[0].ip}'"
-          echo "  kubectl get svc -n monitoring monitoring-prometheus-kube-alertmanager -o jsonpath='{.status.loadBalancer.ingress[0].ip}'"
+          echo "To get the actual Azure DNS names and IPs, run:"
+          echo "  kubectl get svc -n argocd argocd-ui-argo-cd-argocd-server -o wide"
+          echo "  kubectl get svc -n monitoring grafana -o wide"
+          echo "  kubectl get svc -n ingress-nginx ingress-nginx-controller -o wide"
           echo ""
           echo "Benefits of this architecture:"
           echo "  ✅ Clean separation of concerns"
@@ -214,10 +267,10 @@ jobs:
       - name: Uninstall ArgoCD
         if: github.event.inputs.action == 'uninstall'
         run: |
-          echo "Removing ArgoCD applications..."
+          echo "Removing all ArgoCD managed applications..."
           kubectl delete -f kubernetes/argocd.yaml --ignore-not-found=true
           
-          echo "Waiting for applications to be removed..."
+          echo "Waiting for all applications to be removed..."
           sleep 30
           
           echo "Uninstalling ArgoCD..."
@@ -226,5 +279,5 @@ jobs:
           echo "Removing ArgoCD namespace..."
           kubectl delete namespace $ARGOCD_NAMESPACE --ignore-not-found=true
           
-          echo "✅ ArgoCD has been uninstalled"
+          echo "✅ ArgoCD has been uninstalled and all managed applications removed"
 

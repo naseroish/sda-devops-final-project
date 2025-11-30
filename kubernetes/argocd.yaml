@@ -13,11 +13,12 @@ spec:
     repoURL: https://github.com/naseroish/sda-devops-final-project.git
     targetRevision: main
     path: kubernetes
-    # Exclude ArgoCD and monitoring apps to avoid conflicts
+    # Exclude only the argocd.yaml itself to prevent recursion
     directory:
       recurse: true
       exclude: |
         argocd.yaml
+        MONITORING-README.md
   destination:
     server: https://kubernetes.default.svc
     namespace: expensy
@@ -35,45 +36,6 @@ spec:
         duration: 5s
         factor: 2
         maxDuration: 3m
-
----
-# Loki for log aggregation via Helm
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: monitoring-loki
-  namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: default
-  source:
-    repoURL: https://grafana.github.io/helm-charts
-    chart: loki-stack
-    targetRevision: 2.10.2
-    helm:
-      releaseName: monitoring-loki
-      values: |
-        loki:
-          enabled: true
-          persistence:
-            enabled: true
-            size: 10Gi
-        promtail:
-          enabled: true
-        grafana:
-          enabled: false
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: monitoring
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-    retry:
-      limit: 3
 
 ---
 # NGINX Ingress Controller via Helm
@@ -186,4 +148,3 @@ spec:
       - CreateNamespace=true
     retry:
       limit: 3
-

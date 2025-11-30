@@ -1,0 +1,182 @@
+name: Deploy to Cloud Provider
+
+on:
+  workflow_dispatch:
+    inputs:
+      cloud_provider:
+        description: 'Cloud Provider'
+        required: true
+        type: choice
+        options:
+          - digitalocean
+          - azure
+          - aws
+          - gcp
+        default: 'digitalocean'
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - deploy
+          - destroy
+        default: 'deploy'
+      terraform_workspace:
+        description: 'Terraform workspace (environment)'
+        required: false
+        default: 'production'
+
+env:
+  TF_VERSION: '1.9.0'
+
+jobs:
+  deploy:
+    name: Deploy Infrastructure on ${{ github.event.inputs.cloud_provider }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ==================== DigitalOcean Setup ====================
+      - name: Setup DigitalOcean CLI
+        if: github.event.inputs.cloud_provider == 'digitalocean'
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
+      - name: Setup DigitalOcean Terraform Backend
+        if: github.event.inputs.cloud_provider == 'digitalocean'
+        run: |
+          echo "Setting up DigitalOcean Spaces for Terraform state..."
+          export AWS_ACCESS_KEY_ID=${{ secrets.DO_SPACES_ACCESS_KEY }}
+          export AWS_SECRET_ACCESS_KEY=${{ secrets.DO_SPACES_SECRET_KEY }}
+
+      # ==================== Azure Setup ====================
+      - name: Azure Login
+        if: github.event.inputs.cloud_provider == 'azure'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # ==================== AWS Setup ====================
+      - name: Configure AWS Credentials
+        if: github.event.inputs.cloud_provider == 'aws'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      # ==================== GCP Setup ====================
+      - name: Authenticate to Google Cloud
+        if: github.event.inputs.cloud_provider == 'gcp'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # ==================== Terraform Setup ====================
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        working-directory: terraform/${{ github.event.inputs.cloud_provider }}
+        run: |
+          terraform init
+          terraform workspace select ${{ github.event.inputs.terraform_workspace }} || terraform workspace new ${{ github.event.inputs.terraform_workspace }}
+        env:
+          # DigitalOcean Spaces credentials (for state backend)
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+          # Cloud provider tokens
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+      - name: Terraform Plan
+        if: github.event.inputs.action == 'deploy'
+        working-directory: terraform/${{ github.event.inputs.cloud_provider }}
+        run: terraform plan -out=tfplan
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_ACCESS_KEY || secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_SECRET_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Terraform Apply
+        if: github.event.inputs.action == 'deploy'
+        working-directory: terraform/${{ github.event.inputs.cloud_provider }}
+        run: terraform apply -auto-approve tfplan
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_ACCESS_KEY || secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_SECRET_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Terraform Destroy
+        if: github.event.inputs.action == 'destroy'
+        working-directory: terraform/${{ github.event.inputs.cloud_provider }}
+        run: terraform destroy -auto-approve
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_ACCESS_KEY || secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ github.event.inputs.cloud_provider == 'digitalocean' && secrets.DO_SPACES_SECRET_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
+
+      # ==================== Get Kubeconfig ====================
+      - name: Get DigitalOcean Kubeconfig
+        if: github.event.inputs.cloud_provider == 'digitalocean' && github.event.inputs.action == 'deploy'
+        run: |
+          doctl kubernetes cluster kubeconfig save $(terraform -chdir=terraform/digitalocean output -raw cluster_name)
+          kubectl cluster-info
+
+      - name: Get Azure AKS Kubeconfig
+        if: github.event.inputs.cloud_provider == 'azure' && github.event.inputs.action == 'deploy'
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name $(terraform -chdir=terraform/azure output -raw cluster_name) \
+            --overwrite-existing
+          kubectl cluster-info
+
+      # ==================== Update Kubernetes Storage Class ====================
+      - name: Update Kubernetes manifests for cloud provider
+        if: github.event.inputs.action == 'deploy'
+        run: |
+          echo "Updating storage class configuration for ${{ github.event.inputs.cloud_provider }}..."
+          
+          # Apply appropriate storage class
+          if [ "${{ github.event.inputs.cloud_provider }}" == "digitalocean" ]; then
+            kubectl apply -f kubernetes/storageclass-digitalocean.yaml || true
+          elif [ "${{ github.event.inputs.cloud_provider }}" == "azure" ]; then
+            kubectl apply -f kubernetes/storageclass-azure.yaml || true
+          fi
+          
+          echo "✅ Storage class configured"
+
+      # ==================== Deploy ArgoCD ====================
+      - name: Trigger ArgoCD Setup
+        if: github.event.inputs.action == 'deploy'
+        run: |
+          echo "Infrastructure deployed! Next steps:"
+          echo "1. Run the 'ArgoCD Setup' workflow to install ArgoCD"
+          echo "2. ArgoCD will automatically deploy all applications"
+          echo ""
+          echo "Cluster Information:"
+          kubectl get nodes
+          echo ""
+          echo "Available Storage Classes:"
+          kubectl get storageclass
+
+      # ==================== Output Information ====================
+      - name: Display Deployment Info
+        if: github.event.inputs.action == 'deploy'
+        working-directory: terraform/${{ github.event.inputs.cloud_provider }}
+        run: |
+          echo "=========================================="
+          echo "Deployment Complete!"
+          echo "=========================================="
+          echo "Cloud Provider: ${{ github.event.inputs.cloud_provider }}"
+          echo ""
+          terraform output

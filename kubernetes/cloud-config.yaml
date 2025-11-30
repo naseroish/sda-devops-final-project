@@ -1,0 +1,24 @@
+# ================================================================
+#  Cloud Provider Configuration Helper
+# ================================================================
+# This ConfigMap stores cloud provider information for applications
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloud-config
+  namespace: expensy
+data:
+  # Set this to: azure, digitalocean, aws, gcp, etc.
+  CLOUD_PROVIDER: "digitalocean"
+  
+  # Storage class to use
+  STORAGE_CLASS: "do-block-storage"
+  
+  # Load balancer annotations (provider-specific)
+  LB_ANNOTATIONS: |
+    service.beta.kubernetes.io/do-loadbalancer-name: "expensy-lb"
+    service.beta.kubernetes.io/do-loadbalancer-protocol: "http"
+    service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
+    service.beta.kubernetes.io/do-loadbalancer-healthcheck-path: "/healthz"

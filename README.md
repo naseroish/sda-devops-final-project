@@ -19,6 +19,28 @@ GitHub repository: [expense tracker web app](https://github.com/najjaved/devOps-
 
 Your **forked repository** should contain the **Next.js** frontend (root directory) and the **Node/Express** backend (`formitbe/`, or similar) as two distinct folders.
 
+---
+
+## 🚀 Quick Start - Local Setup (Docker Compose)
+
+**Need to run everything locally?** Use our Docker Compose setup for instant deployment!
+
+### One Command Setup:
+```powershell
+docker-compose up --build
+```
+
+### Access Your Application:
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8706/api/expenses
+- **Prometheus Metrics**: http://localhost:8706/metrics
+
+📖 **Full Demo Day Guide**: See [DEMO_SETUP.md](./DEMO_SETUP.md) for complete instructions, troubleshooting, and demo tips!
+
+🧪 **Test Services**: Run `.\test-services.ps1` to verify all services are healthy
+
+---
+
 ### Environment Variables
 
 - **Frontend**: use `NEXT_PUBLIC_*` for variables that need to be exposed to the browser.

@@ -44,7 +44,8 @@ spec:
         resources:
           requests:
             storage: 3Gi
-        storageClassName: managed-csi
+        # Storage class: Use 'managed-csi' for Azure, 'do-block-storage' for DigitalOcean
+        storageClassName: do-block-storage
 ---
 apiVersion: v1
 kind: Service
