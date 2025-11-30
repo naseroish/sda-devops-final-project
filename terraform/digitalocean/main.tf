@@ -41,13 +41,22 @@ provider "digitalocean" {
 }
 
 # ================================================================
+#  Data Sources
+# ================================================================
+
+# Get latest available Kubernetes version
+data "digitalocean_kubernetes_versions" "main" {
+  version_prefix = "1.32."
+}
+
+# ================================================================
 #  DigitalOcean Kubernetes Cluster (DOKS)
 # ================================================================
 
 resource "digitalocean_kubernetes_cluster" "main" {
   name    = "${var.prefix}-doks-cluster"
   region  = var.region
-  version = var.kubernetes_version
+  version = data.digitalocean_kubernetes_versions.main.latest_version
 
   # Auto-upgrade for security patches
   auto_upgrade = true
@@ -113,6 +122,9 @@ resource "digitalocean_firewall" "k8s" {
 
   # Apply to all nodes in the cluster
   tags = ["${var.prefix}"]
+  
+  # Ensure cluster is created first so the tag exists
+  depends_on = [digitalocean_kubernetes_cluster.main]
 
   # Allow inbound HTTP/HTTPS
   inbound_rule {
@@ -187,6 +199,9 @@ resource "digitalocean_loadbalancer" "public" {
 
   # Droplet tag to automatically add cluster nodes
   droplet_tag = "${var.prefix}"
+  
+  # Ensure cluster is created first so the tag exists
+  depends_on = [digitalocean_kubernetes_cluster.main]
 }
 
 # ================================================================
