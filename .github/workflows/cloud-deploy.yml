@@ -20,6 +20,7 @@ on:
         options:
           - deploy
           - destroy
+          - destroy-all
         default: 'deploy'
       terraform_workspace:
         description: 'Terraform workspace (environment)'
@@ -121,6 +122,38 @@ jobs:
         if: github.event.inputs.action == 'destroy'
         working-directory: terraform/${{ github.event.inputs.cloud_provider }}
         run: terraform destroy -auto-approve
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
+      - name: Clean Up Existing Resources (DigitalOcean)
+        if: github.event.inputs.action == 'destroy-all' && github.event.inputs.cloud_provider == 'digitalocean'
+        run: |
+          echo "🧹 Cleaning up ALL DigitalOcean resources for project: ${{ github.event.inputs.terraform_workspace }}"
+          
+          # Delete Kubernetes clusters
+          echo "Deleting Kubernetes clusters..."
+          doctl kubernetes cluster list --format ID,Name --no-header | grep "expensy" | awk '{print $1}' | xargs -r -I {} doctl kubernetes cluster delete {} --force || true
+          
+          # Delete load balancers
+          echo "Deleting load balancers..."
+          doctl compute load-balancer list --format ID,Name --no-header | grep "expensy" | awk '{print $1}' | xargs -r -I {} doctl compute load-balancer delete {} --force || true
+          
+          # Delete firewalls
+          echo "Deleting firewalls..."
+          doctl compute firewall list --format ID,Name --no-header | grep "expensy" | awk '{print $1}' | xargs -r -I {} doctl compute firewall delete {} --force || true
+          
+          # Delete VPCs
+          echo "Deleting VPCs..."
+          doctl vpcs list --format ID,Name --no-header | grep "expensy" | awk '{print $1}' | xargs -r -I {} doctl vpcs delete {} --force || true
+          
+          # Delete container registry (WARNING: This deletes all images!)
+          echo "Deleting container registry..."
+          doctl registry delete --force || true
+          
+          # Clean up terraform state
+          rm -f terraform/${{ github.event.inputs.cloud_provider }}/terraform.tfstate*
+          
+          echo "✅ Cleanup complete! You can now run 'deploy' action."
         env:
           DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
       
