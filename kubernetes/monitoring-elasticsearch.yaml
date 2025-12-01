@@ -107,22 +107,6 @@ spec:
           successThreshold: 1
           timeoutSeconds: 5
         
-        # Lifecycle hooks
-        lifecycle:
-          postStart:
-            exec:
-              command:
-                - bash
-                - -c
-                - |
-                  #!/bin/bash
-                  # Wait for Elasticsearch to be ready
-                  until curl -s http://localhost:9200/_cluster/health | grep -q '"status":"green\|yellow"'; do
-                    echo "Waiting for Elasticsearch to be ready..."
-                    sleep 5
-                  done
-                  echo "Elasticsearch is ready!"
-        
         # Init container to set vm.max_map_count
         sysctlInitContainer:
           enabled: true
