@@ -112,6 +112,9 @@ spec:
         # Pre-load dashboards
         dashboards:
           default:
+            expensy-monitoring:
+              url: https://raw.githubusercontent.com/naseroish/sda-devops-final-project/main/kubernetes/grafana-dashboard-expensy.json
+              datasource: Prometheus
             prometheus-stats:
               gnetId: 2
               revision: 2

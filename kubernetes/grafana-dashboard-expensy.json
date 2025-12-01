@@ -1,0 +1,413 @@
+{
+  "dashboard": {
+    "title": "Expensy - Full Stack Monitoring Dashboard",
+    "tags": ["expensy", "kubernetes", "monitoring"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 0,
+    "refresh": "30s",
+    "panels": [
+      {
+        "type": "stat",
+        "title": "Total Expenses in Database",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "expenses_total",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "orientation": "auto",
+          "textMode": "value_and_name"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 50, "color": "yellow"},
+                {"value": 100, "color": "orange"}
+              ]
+            },
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "type": "stat",
+        "title": "Total HTTP Requests",
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "http_requests_overall_total",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "orientation": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "blue"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "stat",
+        "title": "Backend Pods Running",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "count(kube_pod_status_phase{namespace=\"default\", pod=~\"backend.*\", phase=\"Running\"})",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "orientation": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "red"},
+                {"value": 1, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "stat",
+        "title": "Frontend Pods Running",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "count(kube_pod_status_phase{namespace=\"default\", pod=~\"frontend.*\", phase=\"Running\"})",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "red"},
+                {"value": 1, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "graph",
+        "title": "HTTP Requests Rate (per minute)",
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[1m])",
+            "legendFormat": "{{method}} {{route}} - {{statusCode}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 2,
+        "linewidth": 2,
+        "tooltip": {"shared": true}
+      },
+      {
+        "type": "graph",
+        "title": "HTTP Response Status Codes",
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (statusCode) (rate(http_requests_total[5m]))",
+            "legendFormat": "Status {{statusCode}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 5,
+        "stack": true
+      },
+      {
+        "type": "gauge",
+        "title": "Backend CPU Usage",
+        "gridPos": {"x": 0, "y": 12, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"default\", pod=~\"backend.*\"}[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 60, "color": "yellow"},
+                {"value": 80, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "gauge",
+        "title": "Backend Memory Usage",
+        "gridPos": {"x": 6, "y": 12, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "sum(container_memory_working_set_bytes{namespace=\"default\", pod=~\"backend.*\"}) / 1024 / 1024",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decmbytes",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 400, "color": "yellow"},
+                {"value": 500, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "gauge",
+        "title": "Frontend CPU Usage",
+        "gridPos": {"x": 12, "y": 12, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"default\", pod=~\"frontend.*\"}[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 60, "color": "yellow"},
+                {"value": 80, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "gauge",
+        "title": "Frontend Memory Usage",
+        "gridPos": {"x": 18, "y": 12, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "sum(container_memory_working_set_bytes{namespace=\"default\", pod=~\"frontend.*\"}) / 1024 / 1024",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "decmbytes",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 200, "color": "yellow"},
+                {"value": 300, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "graph",
+        "title": "MongoDB Connections",
+        "gridPos": {"x": 0, "y": 18, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "mongodb_connections{namespace=\"default\"}",
+            "legendFormat": "{{state}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Connections"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 1
+      },
+      {
+        "type": "graph",
+        "title": "Redis Memory Usage",
+        "gridPos": {"x": 12, "y": 18, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "sum(container_memory_working_set_bytes{namespace=\"default\", pod=~\"redis.*\"}) / 1024 / 1024",
+            "legendFormat": "Redis Memory (MB)",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "decmbytes"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 2
+      },
+      {
+        "type": "table",
+        "title": "Top HTTP Endpoints by Request Count",
+        "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "topk(10, sum by (route, method) (http_requests_total))",
+            "refId": "A",
+            "instant": true,
+            "format": "table"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "indexByName": {},
+              "renameByName": {
+                "route": "Endpoint",
+                "method": "Method",
+                "Value": "Total Requests"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "piechart",
+        "title": "HTTP Methods Distribution",
+        "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum by (method) (http_requests_total)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": ["value", "percent"]
+          },
+          "pieType": "donut"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "type": "graph",
+        "title": "Cluster CPU Usage",
+        "gridPos": {"x": 0, "y": 32, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"default\"}[5m])) by (pod)",
+            "legendFormat": "{{pod}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percentunit"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 0,
+        "linewidth": 2
+      },
+      {
+        "type": "graph",
+        "title": "Network I/O",
+        "gridPos": {"x": 12, "y": 32, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"default\"}[5m])) by (pod)",
+            "legendFormat": "RX {{pod}}",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"default\"}[5m])) by (pod)",
+            "legendFormat": "TX {{pod}}",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "Bps", "label": "Bytes/sec"},
+          {"format": "short"}
+        ],
+        "lines": true,
+        "fill": 1
+      },
+      {
+        "type": "logs",
+        "title": "Application Logs (Loki)",
+        "gridPos": {"x": 0, "y": 38, "w": 24, "h": 10},
+        "targets": [
+          {
+            "expr": "{namespace=\"default\", app=~\"backend|frontend\"}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": true,
+          "dedupStrategy": "none"
+        }
+      }
+    ]
+  }
+}
