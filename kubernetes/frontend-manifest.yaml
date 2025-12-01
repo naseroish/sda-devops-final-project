@@ -20,8 +20,8 @@ spec:
     spec:
       containers:
         - name: frontend
-          # ACR image
-          image: cometops.azurecr.io/final/frontend:latest
+          # DigitalOcean Container Registry image
+          image: registry.digitalocean.com/expensyregistry/expensy/frontend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 3000

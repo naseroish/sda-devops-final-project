@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: cometops.azurecr.io/final/backend:latest
+          image: registry.digitalocean.com/expensyregistry/expensy/backend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8706

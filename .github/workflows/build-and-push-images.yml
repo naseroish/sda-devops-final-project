@@ -1,0 +1,196 @@
+name: Build and Push Docker Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      cloud_provider:
+        description: 'Target Cloud Provider'
+        required: true
+        type: choice
+        options:
+          - digitalocean
+          - azure
+        default: 'digitalocean'
+      component:
+        description: 'Component to build'
+        required: true
+        type: choice
+        options:
+          - all
+          - frontend
+          - backend
+        default: 'all'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/build-and-push-images.yml'
+
+env:
+  # DigitalOcean
+  DO_REGISTRY: registry.digitalocean.com/expensyregistry
+  
+  # Azure
+  AZURE_REGISTRY: cometops.azurecr.io
+  
+  # Common
+  FRONTEND_IMAGE: expensy/frontend
+  BACKEND_IMAGE: expensy/backend
+
+jobs:
+  build-frontend:
+    name: Build Frontend Image
+    runs-on: ubuntu-latest
+    if: |
+      github.event.inputs.component == 'frontend' || 
+      github.event.inputs.component == 'all' || 
+      github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ==================== DigitalOcean Registry ====================
+      - name: Login to DigitalOcean Container Registry
+        if: github.event.inputs.cloud_provider == 'digitalocean' || github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: registry.digitalocean.com
+          username: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          password: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
+      - name: Build and push to DigitalOcean
+        if: github.event.inputs.cloud_provider == 'digitalocean' || github.event_name == 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.DO_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.DO_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
+          build-args: |
+            NEXT_PUBLIC_API_URL=/api
+          cache-from: type=registry,ref=${{ env.DO_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.DO_REGISTRY }}/${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
+
+      # ==================== Azure Registry ====================
+      - name: Azure Login
+        if: github.event.inputs.cloud_provider == 'azure'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to Azure Container Registry
+        if: github.event.inputs.cloud_provider == 'azure'
+        run: az acr login --name cometops
+
+      - name: Build and push to Azure
+        if: github.event.inputs.cloud_provider == 'azure'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.AZURE_REGISTRY }}/final/frontend:${{ github.sha }}
+            ${{ env.AZURE_REGISTRY }}/final/frontend:latest
+          build-args: |
+            NEXT_PUBLIC_API_URL=/api
+
+  build-backend:
+    name: Build Backend Image
+    runs-on: ubuntu-latest
+    if: |
+      github.event.inputs.component == 'backend' || 
+      github.event.inputs.component == 'all' || 
+      github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ==================== DigitalOcean Registry ====================
+      - name: Login to DigitalOcean Container Registry
+        if: github.event.inputs.cloud_provider == 'digitalocean' || github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: registry.digitalocean.com
+          username: ${{ secrets.DIGITALOCEAN_TOKEN }}
+          password: ${{ secrets.DIGITALOCEAN_TOKEN }}
+
+      - name: Build and push to DigitalOcean
+        if: github.event.inputs.cloud_provider == 'digitalocean' || github.event_name == 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.DO_REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.DO_REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=registry,ref=${{ env.DO_REGISTRY }}/${{ env.BACKEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.DO_REGISTRY }}/${{ env.BACKEND_IMAGE }}:buildcache,mode=max
+
+      # ==================== Azure Registry ====================
+      - name: Azure Login
+        if: github.event.inputs.cloud_provider == 'azure'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to Azure Container Registry
+        if: github.event.inputs.cloud_provider == 'azure'
+        run: az acr login --name cometops
+
+      - name: Build and push to Azure
+        if: github.event.inputs.cloud_provider == 'azure'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.AZURE_REGISTRY }}/final/backend:${{ github.sha }}
+            ${{ env.AZURE_REGISTRY }}/final/backend:latest
+
+  summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-backend]
+    if: always()
+    
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "=========================================="
+          echo "Docker Images Build Complete!"
+          echo "=========================================="
+          echo ""
+          echo "Cloud Provider: ${{ github.event.inputs.cloud_provider || 'digitalocean (auto)' }}"
+          echo "Component: ${{ github.event.inputs.component || 'all (auto)' }}"
+          echo "Git SHA: ${{ github.sha }}"
+          echo ""
+          echo "Images pushed:"
+          
+          if [ "${{ github.event.inputs.cloud_provider }}" == "digitalocean" ] || [ "${{ github.event_name }}" == "push" ]; then
+            echo "  📦 registry.digitalocean.com/expensyregistry/expensy/frontend:${{ github.sha }}"
+            echo "  📦 registry.digitalocean.com/expensyregistry/expensy/frontend:latest"
+            echo "  📦 registry.digitalocean.com/expensyregistry/expensy/backend:${{ github.sha }}"
+            echo "  📦 registry.digitalocean.com/expensyregistry/expensy/backend:latest"
+          else
+            echo "  📦 cometops.azurecr.io/final/frontend:${{ github.sha }}"
+            echo "  📦 cometops.azurecr.io/final/frontend:latest"
+            echo "  📦 cometops.azurecr.io/final/backend:${{ github.sha }}"
+            echo "  📦 cometops.azurecr.io/final/backend:latest"
+          fi
+          
+          echo ""
+          echo "Next steps:"
+          echo "1. ArgoCD will automatically detect and deploy the new images"
+          echo "2. Or manually sync: kubectl argo app sync expensy-app -n argocd"
+          echo "3. Watch deployment: kubectl get pods -n expensy -w"
