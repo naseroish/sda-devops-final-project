@@ -52,6 +52,9 @@ spec:
             requests:
               storage: 30Gi
         
+        # Explicitly disable cluster bootstrapping for single-node
+        clusterInitialMasterNodes: []
+        
         # Security configuration (disabled for simplicity, enable in production)
         esConfig:
           elasticsearch.yml: |
@@ -69,7 +72,7 @@ spec:
             # Network settings
             network.host: 0.0.0.0
             
-            # Discovery settings
+            # Discovery settings for single-node
             discovery.type: single-node
             
             # Index settings
