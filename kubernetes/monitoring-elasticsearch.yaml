@@ -24,7 +24,8 @@ spec:
         # Replica configuration
         # Single node for development (increase for production)
         replicas: 1
-        minimumMasterNodes: 1
+        # Note: minimumMasterNodes not needed for single-node
+        # minimumMasterNodes: 1
         
         # Resources - adjusted for better performance
         resources:
