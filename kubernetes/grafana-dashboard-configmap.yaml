@@ -179,7 +179,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "count(kube_pod_status_phase{namespace=\"default\", pod=~\"backend.*\", phase=\"Running\"})",
+              "expr": "count(kube_pod_status_phase{namespace=\"expensy\", pod=~\"backend.*\", phase=\"Running\"})",
               "refId": "A"
             }
           ],
@@ -234,7 +234,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "count(kube_pod_status_phase{namespace=\"default\", pod=~\"frontend.*\", phase=\"Running\"})",
+              "expr": "count(kube_pod_status_phase{namespace=\"expensy\", pod=~\"frontend.*\", phase=\"Running\"})",
               "refId": "A"
             }
           ],
@@ -459,7 +459,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"default\", pod=~\"backend.*\"}[5m])) * 100",
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"expensy\", pod=~\"backend.*\"}[5m])) * 100",
               "refId": "A"
             }
           ],
@@ -517,7 +517,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "sum(container_memory_working_set_bytes{namespace=\"default\", pod=~\"backend.*\"}) / 1024 / 1024",
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"expensy\", pod=~\"backend.*\"}) / 1024 / 1024",
               "refId": "A"
             }
           ],
@@ -576,7 +576,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"default\", pod=~\"frontend.*\"}[5m])) * 100",
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"expensy\", pod=~\"frontend.*\"}[5m])) * 100",
               "refId": "A"
             }
           ],
@@ -634,7 +634,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "sum(container_memory_working_set_bytes{namespace=\"default\", pod=~\"frontend.*\"}) / 1024 / 1024",
+              "expr": "sum(container_memory_working_set_bytes{namespace=\"expensy\", pod=~\"frontend.*\"}) / 1024 / 1024",
               "refId": "A"
             }
           ],
@@ -666,7 +666,7 @@ data:
           "pluginVersion": "10.0.0",
           "targets": [
             {
-              "expr": "{namespace=\"default\", app=~\"backend|frontend\"}",
+              "expr": "{namespace=\"expensy\", app=~\"backend|frontend\"}",
               "refId": "A"
             }
           ],

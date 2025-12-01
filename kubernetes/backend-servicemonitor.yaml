@@ -4,7 +4,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: backend-metrics
-  namespace: default
+  namespace: monitoring
   labels:
     app: backend
     release: prometheus
@@ -19,4 +19,4 @@ spec:
       scrapeTimeout: 10s
   namespaceSelector:
     matchNames:
-      - default
+      - expensy
